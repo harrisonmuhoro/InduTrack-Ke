@@ -1,0 +1,33 @@
+# Environment
+.env
+.env.backup
+.env.production
+
+# Dependencies
+/vendor
+
+# Laravel generated
+/bootstrap/cache/*.php
+/storage/logs/*.log
+/storage/framework/cache/data/*
+/storage/framework/sessions/*
+/storage/framework/views/*
+/storage/app/private/*
+/storage/app/public/*
+/public/storage
+/public/hot
+
+# Testing
+.phpunit.result.cache
+coverage/
+
+# IDE
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+
+# Build
+_ide_helper.php
+_ide_helper_models.php
+.phpstorm.meta.php
