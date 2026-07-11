@@ -28,17 +28,7 @@ class CompanyController extends Controller
         return $company;
     }
 
-    public function profile(Request $request)
-    {
-        return response()->json($this->getCompany($request));
-    }
 
-    public function updateProfile(Request $request)
-    {
-        $company = $this->getCompany($request);
-        $company->update($request->all());
-        return response()->json($company);
-    }
 
     public function slots(Request $request)
     {

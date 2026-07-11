@@ -2,8 +2,11 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import api from '../axios';
+import { useAuth } from '../context/AuthContext';
 
 export default function MessagesPage() {
+  const { role, context, logout } = useAuth();
+
   const [conversations, setConversations] = useState([]);
   const [activePartnerId, setActivePartnerId] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -73,7 +76,6 @@ export default function MessagesPage() {
   };
 
   const handleGoBack = () => {
-    const role = localStorage.getItem('role');
     if (role === 'student') navigate('/student');
     else if (role === 'company_supervisor') navigate('/company');
     else if (role === 'institution_supervisor') navigate('/supervisor');

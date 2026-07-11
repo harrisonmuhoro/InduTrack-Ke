@@ -13,6 +13,7 @@ use App\Http\Controllers\InstitutionController;
 use App\Http\Controllers\EvaluationController;
 use App\Http\Controllers\FieldVisitController;
 use App\Http\Controllers\MessageController;
+use App\Http\Controllers\ProfileController;
 
 // ─── Public Auth Routes ──────────────────────────────────────────────────────
 Route::middleware('throttle:10,1')->group(function () {
@@ -27,7 +28,15 @@ Route::middleware(['auth:sanctum', 'throttle:60,1'])->group(function () {
 
     // Auth
     Route::post('/auth/logout',  [AuthController::class, 'logout']);
-    Route::get('/auth/profile',  [AuthController::class, 'profile']);
+    
+    // ── Profile (Unified) ────────────────────────────────────────────────────
+    Route::get('/profile',            [ProfileController::class, 'show']);
+    Route::put('/profile',            [ProfileController::class, 'update']);
+    Route::put('/profile/password',   [ProfileController::class, 'updatePassword']);
+    Route::put('/profile/email',      [ProfileController::class, 'updateEmail']);
+    Route::post('/profile/photo',     [ProfileController::class, 'uploadPhoto']);
+    Route::post('/profile/cv',        [ProfileController::class, 'uploadCv']);
+    Route::post('/profile/transcript',[ProfileController::class, 'uploadTranscript']);
     Route::post('/auth/2fa/setup', [AuthController::class, 'setup2fa']);
     Route::post('/auth/2fa/verify', [AuthController::class, 'verify2fa']);
     Route::post('/auth/2fa/toggle', [AuthController::class, 'toggle2fa']);
@@ -43,8 +52,6 @@ Route::middleware(['auth:sanctum', 'throttle:60,1'])->group(function () {
     Route::get('/messages/unread',                 [MessageController::class, 'unreadCount']);
 
     // ── Student Routes ───────────────────────────────────────────────────────
-    Route::get('/students/profile',    [StudentController::class, 'profile']);
-    Route::post('/students/profile',   [StudentController::class, 'updateProfile']);
     Route::get('/students/slots',      [StudentController::class, 'searchSlots']);
     Route::get('/students/applications', [StudentController::class, 'myApplications']);
     Route::get('/students/match',      [StudentController::class, 'smartMatch']);
@@ -71,8 +78,6 @@ Route::middleware(['auth:sanctum', 'throttle:60,1'])->group(function () {
     Route::post('/placements/{placementId}/grade', [LogbookController::class, 'grade']);
 
     // ── Company Routes ────────────────────────────────────────────────────────
-    Route::get('/companies/profile',                      [CompanyController::class, 'profile']);
-    Route::post('/companies/profile',                     [CompanyController::class, 'updateProfile']);
     Route::get('/companies/slots',                        [CompanyController::class, 'slots']);
     Route::post('/companies/slots',                       [CompanyController::class, 'createSlot']);
     Route::get('/companies/applicants',                   [CompanyController::class, 'allApplicants']);

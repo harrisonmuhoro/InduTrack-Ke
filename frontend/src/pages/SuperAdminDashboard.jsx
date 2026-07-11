@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Settings, Megaphone, BarChart, Building, Users, MessageSquare } from 'lucide-react';
+import { Settings, Megaphone, BarChart, Building, Users, MessageSquare, UserCircle } from 'lucide-react';
 import api from '../axios';
+import { useAuth } from '../context/AuthContext';
 
 export default function SuperAdminDashboard() {
+  const { role, context, logout } = useAuth();
+
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [metrics, setMetrics] = useState(null);
@@ -50,9 +53,8 @@ export default function SuperAdminDashboard() {
     }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('role');
+  const handleLogout = async () => {
+    await logout();
     navigate('/login');
   };
 
@@ -138,9 +140,12 @@ export default function SuperAdminDashboard() {
           </nav>
         </div>
         <div className="flex items-center gap-4">
-          <span className="text-sm font-medium text-gray-400">{localStorage.getItem('context')}</span>
+          <span className="text-sm font-medium text-gray-400">{context}</span>
           <Link to="/messages" className="text-sm font-medium text-blue-400 hover:text-blue-300 flex items-center gap-1">
             <MessageSquare size={16} /> Messages
+          </Link>
+          <Link to="/profile" className="text-sm font-medium text-purple-400 hover:text-purple-300 flex items-center gap-1">
+            <UserCircle size={16} /> My Profile
           </Link>
           <button onClick={() => setShowBroadcastModal(true)} className="flex items-center gap-2 bg-yellow-500 hover:bg-yellow-600 text-black px-3 py-1.5 rounded-lg text-sm font-bold transition">
             <Megaphone size={16} /> Broadcast

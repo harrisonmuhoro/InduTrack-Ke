@@ -10,24 +10,7 @@ use Illuminate\Http\Request;
 
 class StudentController extends Controller
 {
-    public function profile(Request $request)
-    {
-        $student = Student::firstOrCreate(
-            ['user_id' => $request->user()->id],
-            ['reg_number' => 'REG' . time(), 'institution_id' => 1]
-        );
-        return response()->json($student->load('user'));
-    }
 
-    public function updateProfile(Request $request)
-    {
-        $student = Student::where('user_id', $request->user()->id)->firstOrFail();
-        $student->update($request->only([
-            'reg_number', 'department', 'program', 'year_of_study',
-            'skills', 'emergency_contact',
-        ]));
-        return response()->json($student->load('user'));
-    }
 
     public function searchSlots(Request $request)
     {

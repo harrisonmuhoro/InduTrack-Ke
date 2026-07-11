@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
 
 use Illuminate\Auth\Events\Registered;
@@ -36,10 +37,10 @@ class AuthController extends Controller
             DB::table('user_roles')->insert(['user_id' => $user->id, 'role_id' => $roleId]);
         }
 
-        $token = $user->createToken('auth_token')->plainTextToken;
+        Auth::login($user);
+        $request->session()->regenerate();
 
         return response()->json([
-            'token' => $token,
             'role' => $roleName,
             'user' => $user,
             'context' => $this->getUserContextString($user, $roleName)
@@ -83,20 +84,21 @@ class AuthController extends Controller
             ->where('user_roles.user_id', $user->id)
             ->value('roles.name');
 
-        // Check if 2FA is enabled or required
+        // Check if 2FA is enabled
         if ($user->two_factor_enabled) {
-            $tempToken = $user->createToken('2fa_temp', ['2fa'])->plainTextToken;
+            // Log in partially or fully? We should wait to regenerate session completely, but since we are stateful,
+            // we can set a session flag instead of a temp token.
+            $request->session()->put('2fa:user:id', $user->id);
             return response()->json([
                 '2fa_required' => true,
-                'temp_token' => $tempToken,
                 'setup_required' => empty($user->google2fa_secret)
             ]);
         }
 
-        $token = $user->createToken('auth_token', ['*'])->plainTextToken;
+        Auth::login($user);
+        $request->session()->regenerate();
 
         return response()->json([
-            'token' => $token,
             'role' => $role ?? 'student',
             'user' => $user,
             'context' => $this->getUserContextString($user, $role)
@@ -105,7 +107,9 @@ class AuthController extends Controller
 
     public function setup2fa(Request $request)
     {
-        $user = $request->user();
+        $userId = $request->session()->get('2fa:user:id');
+        $user = $userId ? User::find($userId) : $request->user();
+        if (!$user) return response()->json(['message' => 'Unauthorized'], 401);
         
         $google2fa = app('pragmarx.google2fa');
         
@@ -130,7 +134,9 @@ class AuthController extends Controller
     {
         $request->validate(['otp' => 'required|string']);
         
-        $user = $request->user();
+        $userId = $request->session()->get('2fa:user:id');
+        $user = $userId ? User::find($userId) : $request->user();
+        if (!$user) return response()->json(['message' => 'Unauthorized'], 401);
         
         $google2fa = app('pragmarx.google2fa');
         $valid = $google2fa->verifyKey($user->google2fa_secret, $request->otp);
@@ -141,17 +147,13 @@ class AuthController extends Controller
                 $user->save();
             }
             
-            $user->currentAccessToken()->delete();
-            
-            $role = DB::table('user_roles')
-                ->join('roles', 'user_roles.role_id', '=', 'roles.id')
-                ->where('user_roles.user_id', $user->id)
-                ->value('roles.name');
-                
-            $token = $user->createToken('auth_token', ['*'])->plainTextToken;
+            if ($userId) {
+                Auth::login($user);
+                $request->session()->forget('2fa:user:id');
+                $request->session()->regenerate();
+            }
             
             return response()->json([
-                'token' => $token,
                 'role' => $role ?? 'student',
                 'user' => $user,
                 'context' => $this->getUserContextString($user, $role)
@@ -181,7 +183,9 @@ class AuthController extends Controller
 
     public function logout(Request $request)
     {
-        $request->user()->currentAccessToken()->delete();
+        Auth::guard('web')->logout();
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
         return response()->json(['message' => 'Logged out successfully']);
     }
 

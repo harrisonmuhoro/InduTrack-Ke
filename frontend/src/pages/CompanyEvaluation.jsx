@@ -1,8 +1,11 @@
 import { useState } from 'react';
+import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router-dom';
 import { Home, Zap, Book, Star } from 'lucide-react';
 
 export default function CompanyEvaluation() {
+  const { role, context, logout } = useAuth();
+
   const [rating, setRating] = useState(0);
   const [feedback, setFeedback] = useState('');
 
@@ -26,7 +29,7 @@ export default function CompanyEvaluation() {
       <div className="flex-1 flex flex-col h-screen overflow-hidden">
         <header className="bg-[var(--color-surface)] border-b border-[var(--color-border)] h-16 flex items-center justify-between px-8 shadow-sm flex-shrink-0">
           <h2 className="text-xl font-bold text-[var(--color-primary-dark)]">Student Portal</h2>
-          <div className="text-sm font-medium text-[var(--color-text-secondary)]">{localStorage.getItem('context')}</div>
+          <div className="text-sm font-medium text-[var(--color-text-secondary)]">{context}</div>
         </header>
         <div className="flex-1 p-8 flex items-center justify-center overflow-y-auto">
           <div className="bg-[var(--color-surface)] p-8 rounded-xl border border-[var(--color-border)] shadow-sm max-w-lg w-full">

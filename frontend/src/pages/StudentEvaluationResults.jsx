@@ -2,12 +2,12 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Home, ClipboardList, Book, FolderOpen, Zap, Star, BarChart2, LogOut, FileText } from 'lucide-react';
 import api from '../axios';
+import { useAuth } from '../context/AuthContext';
 
 const Sidebar = ({ active }) => {
   const navigate = useNavigate();
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('role');
+  const handleLogout = async () => {
+    await logout();
     navigate('/login');
   };
   const items = [
@@ -33,6 +33,8 @@ const Sidebar = ({ active }) => {
 };
 
 export default function StudentEvaluationResults() {
+  const { role, context, logout } = useAuth();
+
   const [evaluations, setEvaluations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -52,7 +54,7 @@ export default function StudentEvaluationResults() {
         {/* Header */}
         <header className="bg-[var(--color-surface)] border-b border-[var(--color-border)] h-16 flex items-center justify-between px-8 shadow-sm flex-shrink-0">
           <h2 className="text-xl font-bold text-[var(--color-primary-dark)]">Student Portal</h2>
-          <div className="text-sm font-medium text-[var(--color-text-secondary)]">{localStorage.getItem('context')}</div>
+          <div className="text-sm font-medium text-[var(--color-text-secondary)]">{context}</div>
         </header>
 
         <div className="flex-1 p-8 overflow-y-auto">

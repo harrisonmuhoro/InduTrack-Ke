@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { BarChart, GraduationCap, Building, MapPin, AlertTriangle, FileText, MessageSquare } from 'lucide-react';
+import { BarChart, GraduationCap, Building, MapPin, AlertTriangle, FileText, MessageSquare, UserCircle } from 'lucide-react';
 import api from '../axios';
+import { useAuth } from '../context/AuthContext';
 
 export default function InstitutionDashboard() {
+  const { role, context, logout } = useAuth();
+
   const [activeTab, setActiveTab] = useState('dashboard');
   const [metrics, setMetrics] = useState(null);
   const [students, setStudents] = useState([]);
@@ -44,9 +47,8 @@ export default function InstitutionDashboard() {
     }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('role');
+  const handleLogout = async () => {
+    await logout();
     navigate('/login');
   };
 
@@ -131,9 +133,12 @@ export default function InstitutionDashboard() {
           </nav>
         </div>
         <div className="flex items-center gap-4">
-          <span className="text-sm font-medium text-gray-500">{localStorage.getItem('context')}</span>
+          <span className="text-sm font-medium text-gray-500">{context}</span>
           <Link to="/messages" className="text-sm font-medium text-blue-500 hover:text-blue-700 flex items-center gap-1">
             <MessageSquare size={16} /> Messages
+          </Link>
+          <Link to="/profile" className="text-sm font-medium text-[var(--color-primary)] hover:opacity-80 flex items-center gap-1">
+            <UserCircle size={16} /> My Profile
           </Link>
           <button onClick={handleLogout} className="text-sm font-medium text-red-500 hover:text-red-700">Logout</button>
         </div>

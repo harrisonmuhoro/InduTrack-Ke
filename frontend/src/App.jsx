@@ -1,5 +1,6 @@
 import { Routes, Route, Link, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
+import { useAuth } from './context/AuthContext';
 import api from './axios';
 import StudentDashboard from './pages/StudentDashboard';
 import StudentLogbook from './pages/StudentLogbook';
@@ -16,6 +17,7 @@ import SupervisorFieldVisits from './pages/SupervisorFieldVisits';
 import InstitutionDashboard from './pages/InstitutionDashboard';
 import SuperAdminDashboard from './pages/SuperAdminDashboard';
 import MessagesPage from './pages/MessagesPage';
+import ProfilePage from './pages/ProfilePage';
 
 // --- Stub Components for Phase 1 ---
 
@@ -31,10 +33,13 @@ function Login() {
   const [secret, setSecret] = useState('');
   const navigate = useNavigate();
 
+  const { login } = useAuth();
+
   const handleLogin = async (e) => {
     e.preventDefault();
     setError('');
     try {
+      await api.get('/sanctum/csrf-cookie'); // Initialize CSRF cookie
       const res = await api.post('/auth/login', { email, password });
       
       if (res.data['2fa_required']) {
@@ -72,12 +77,10 @@ function Login() {
   };
 
   const finishLogin = (data) => {
-    localStorage.setItem('token', data.token);
-    localStorage.setItem('role', data.role);
-    localStorage.setItem('context', data.context || '');
+    login(data);
     
     let route = '/student';
-    if (data.role === 'company_supervisor') route = '/company';
+    if (data.role === 'company_supervisor' || data.role === 'company') route = '/company';
     if (data.role === 'institution_supervisor') route = '/supervisor';
     if (data.role === 'institution_admin') route = '/institution';
     if (data.role === 'super_admin') route = '/superadmin';
@@ -172,6 +175,7 @@ function Register() {
     e.preventDefault();
     setError('');
     try {
+      await api.get('/sanctum/csrf-cookie'); // CSRF protection
       await api.post('/auth/register', formData);
       setSuccess(true);
     } catch (err) {
@@ -310,6 +314,7 @@ function App() {
       <Route path="/institution/*" element={<InstitutionDashboard />} />
       <Route path="/superadmin/*" element={<SuperAdminDashboard />} />
       <Route path="/messages" element={<MessagesPage />} />
+      <Route path="/profile" element={<ProfilePage />} />
     </Routes>
   );
 }

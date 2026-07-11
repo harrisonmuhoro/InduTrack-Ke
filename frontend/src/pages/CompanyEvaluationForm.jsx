@@ -2,8 +2,11 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Building, Users, LogOut } from 'lucide-react';
 import api from '../axios';
+import { useAuth } from '../context/AuthContext';
 
 export default function CompanyEvaluationForm() {
+  const { role, context, logout } = useAuth();
+
   const [placement, setPlacement] = useState(null);
   const [loading, setLoading] = useState(true);
   const [searchParams] = useSearchParams();
@@ -52,9 +55,8 @@ export default function CompanyEvaluationForm() {
     }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('role');
+  const handleLogout = async () => {
+    await logout();
     navigate('/login');
   };
 
@@ -90,7 +92,7 @@ export default function CompanyEvaluationForm() {
       <div className="flex-1 flex flex-col h-screen overflow-hidden">
         <header className="bg-[var(--color-surface)] border-b border-[var(--color-border)] h-16 flex items-center justify-between px-8 shadow-sm flex-shrink-0">
           <h2 className="text-xl font-bold text-[var(--color-primary-dark)]">Company Portal</h2>
-          <div className="text-sm font-medium text-[var(--color-text-secondary)]">{localStorage.getItem('context')}</div>
+          <div className="text-sm font-medium text-[var(--color-text-secondary)]">{context}</div>
         </header>
         <div className="flex-1 p-8 overflow-y-auto">
         <div className="max-w-2xl mx-auto">

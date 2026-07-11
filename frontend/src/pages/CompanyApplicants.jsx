@@ -2,8 +2,11 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Building, Users, LogOut } from 'lucide-react';
 import api from '../axios';
+import { useAuth } from '../context/AuthContext';
 
 export default function CompanyApplicants() {
+  const { role, context, logout } = useAuth();
+
   const [applicants, setApplicants] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchParams] = useSearchParams();
@@ -27,9 +30,8 @@ export default function CompanyApplicants() {
     }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('role');
+  const handleLogout = async () => {
+    await logout();
     navigate('/login');
   };
 
@@ -61,7 +63,7 @@ export default function CompanyApplicants() {
       <div className="flex-1 flex flex-col h-screen overflow-hidden">
         <header className="bg-[var(--color-surface)] border-b border-[var(--color-border)] h-16 flex items-center justify-between px-8 shadow-sm flex-shrink-0">
           <h2 className="text-xl font-bold text-[var(--color-primary-dark)]">Company Portal</h2>
-          <div className="text-sm font-medium text-[var(--color-text-secondary)]">{localStorage.getItem('context')}</div>
+          <div className="text-sm font-medium text-[var(--color-text-secondary)]">{context}</div>
         </header>
         <div className="flex-1 p-8 overflow-y-auto">
         <h2 className="text-2xl font-bold text-[var(--color-text-primary)] mb-2">Applicants Inbox</h2>

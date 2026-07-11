@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Home, ClipboardList, Book, Zap, Star, LogOut, Calendar, MessageSquare } from 'lucide-react';
+import { Home, ClipboardList, Book, Zap, Star, LogOut, Calendar, MessageSquare, UserCircle } from 'lucide-react';
 import api from '../axios';
+import { useAuth } from '../context/AuthContext';
 
 export default function StudentDashboard() {
+  const { role, context, logout } = useAuth();
+
   const [slots, setSlots] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -12,7 +15,7 @@ export default function StudentDashboard() {
 
   useEffect(() => {
     // Check 2fa status from profile
-    api.get('/auth/profile').then(res => setIs2faEnabled(res.data.two_factor_enabled));
+    api.get('/profile').then(res => setIs2faEnabled(res.data.user?.two_factor_enabled || false));
 
     api.get('/students/slots')
       .then(res => setSlots(res.data))
@@ -20,9 +23,8 @@ export default function StudentDashboard() {
       .finally(() => setLoading(false));
   }, []);
 
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('role');
+  const handleLogout = async () => {
+    await logout();
     navigate('/login');
   };
 
@@ -60,6 +62,9 @@ export default function StudentDashboard() {
           <Link to="/messages" className="flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-[var(--color-primary)] text-white/90">
             <MessageSquare size={18} /> Messages
           </Link>
+          <Link to="/profile" className="flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-[var(--color-primary)] text-white/90">
+            <UserCircle size={18} /> My Profile
+          </Link>
         </nav>
         <button onClick={toggle2FA} className="flex items-center gap-2 w-full text-left px-4 py-2 rounded-lg text-blue-300 hover:bg-blue-500/20 mt-4 transition">
           <Zap size={18} /> {is2faEnabled ? 'Disable 2FA' : 'Enable 2FA'}
@@ -74,7 +79,7 @@ export default function StudentDashboard() {
         {/* Header */}
         <header className="bg-[var(--color-surface)] border-b border-[var(--color-border)] h-16 flex items-center justify-between px-8 shadow-sm flex-shrink-0">
           <h2 className="text-xl font-bold text-[var(--color-primary-dark)]">Student Portal</h2>
-          <div className="text-sm font-medium text-[var(--color-text-secondary)]">{localStorage.getItem('context')}</div>
+          <div className="text-sm font-medium text-[var(--color-text-secondary)]">{context}</div>
         </header>
 
         <div className="flex-1 p-8 overflow-y-auto">

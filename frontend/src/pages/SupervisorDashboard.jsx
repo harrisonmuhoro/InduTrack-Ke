@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { GraduationCap, LogOut, Book, MessageSquare } from 'lucide-react';
+import { GraduationCap, LogOut, Book, MessageSquare, UserCircle } from 'lucide-react';
 import api from '../axios';
+import { useAuth } from '../context/AuthContext';
 
 export default function SupervisorDashboard() {
+  const { role, context, logout } = useAuth();
+
   const [placements, setPlacements] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedPlacement, setSelectedPlacement] = useState(null);
@@ -30,9 +33,8 @@ export default function SupervisorDashboard() {
     openLogbook(selectedPlacement.id);
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('role');
+  const handleLogout = async () => {
+    await logout();
     navigate('/login');
   };
 
@@ -47,6 +49,9 @@ export default function SupervisorDashboard() {
           <Link to="/messages" className="flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-[var(--color-primary)] text-white/90 text-sm">
             <MessageSquare size={18} /> Messages
           </Link>
+          <Link to="/profile" className="flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-[var(--color-primary)] text-white/90 text-sm">
+            <UserCircle size={18} /> My Profile
+          </Link>
         </nav>
         <button onClick={handleLogout} className="flex items-center gap-2 w-full text-left px-4 py-2 rounded-lg text-red-300 hover:bg-red-500/20 mt-4 text-sm transition">
           <LogOut size={18} /> Logout
@@ -56,7 +61,7 @@ export default function SupervisorDashboard() {
       <div className="flex-1 flex flex-col h-screen overflow-hidden">
         <header className="bg-[var(--color-surface)] border-b border-[var(--color-border)] h-16 flex items-center justify-between px-8 shadow-sm flex-shrink-0">
           <h2 className="text-xl font-bold text-[var(--color-primary-dark)]">Supervisor Portal</h2>
-          <div className="text-sm font-medium text-[var(--color-text-secondary)]">{localStorage.getItem('context')}</div>
+          <div className="text-sm font-medium text-[var(--color-text-secondary)]">{context}</div>
         </header>
 
         <div className="flex-1 flex overflow-hidden">
