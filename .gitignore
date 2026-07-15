@@ -8,3 +8,4 @@ composer.phar
 
 # Start scripts
 start-backend.bat
+backend/.env

@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Academic Supervisor Dashboard | InduTrack KE</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@100..900&family=Plus+Jakarta+Sans:wght@100..900&display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "secondary-fixed-dim": "#ffb95f",
+                    "accent-hover": "#FCD34D",
+                    "on-tertiary": "#ffffff",
+                    "on-background": "#0b1c30",
+                    "inverse-surface": "#213145",
+                    "text-main": "#0F172A",
+                    "primary-subtle": "#ECFDF5",
+                    "surface-dim": "#cbdbf5",
+                    "primary-fixed-dim": "#83d7b1",
+                    "tertiary-fixed-dim": "#95d4b6",
+                    "on-secondary": "#ffffff",
+                    "on-tertiary-container": "#a9e9cb",
+                    "surface-tint": "#046c4d",
+                    "surface-container-lowest": "#ffffff",
+                    "surface-variant": "#d3e4fe",
+                    "on-error-container": "#93000a",
+                    "surface": "#FFFFFF",
+                    "on-primary-container": "#98edc6",
+                    "on-primary": "#ffffff",
+                    "tertiary-fixed": "#b0f0d2",
+                    "background": "#F8FAFC",
+                    "secondary-fixed": "#ffddb8",
+                    "error-container": "#ffdad6",
+                    "error": "#ba1a1a",
+                    "on-error": "#ffffff",
+                    "surface-container-low": "#eff4ff",
+                    "on-surface": "#0b1c30",
+                    "primary-container": "#0a6e4f",
+                    "inverse-primary": "#83d7b1",
+                    "tertiary-container": "#2e6b53",
+                    "on-secondary-container": "#684000",
+                    "surface-container": "#e5eeff",
+                    "outline": "#6f7a73",
+                    "accent-dark": "#B45309",
+                    "primary-hover": "#12A37A",
+                    "primary": "#00543b",
+                    "on-tertiary-fixed": "#002115",
+                    "inverse-on-surface": "#eaf1ff",
+                    "surface-container-high": "#dce9ff",
+                    "secondary-container": "#fea619",
+                    "on-primary-fixed-variant": "#005139",
+                    "on-secondary-fixed": "#2a1700",
+                    "on-tertiary-fixed-variant": "#0d513a",
+                    "border": "#E2E8F0",
+                    "tertiary": "#10533c",
+                    "surface-container-highest": "#d3e4fe",
+                    "on-surface-variant": "#3f4943",
+                    "secondary": "#855300",
+                    "primary-fixed": "#9ef4cc",
+                    "on-primary-fixed": "#002115",
+                    "surface-bright": "#f8f9ff",
+                    "on-secondary-fixed-variant": "#653e00",
+                    "outline-variant": "#bec9c1"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "gutter": "24px",
+                    "margin-desktop": "32px",
+                    "sidebar-width": "256px",
+                    "container-max": "1280px",
+                    "margin-mobile": "16px",
+                    "unit": "4px"
+            },
+            "fontFamily": {
+                    "headline-md": ["Plus Jakarta Sans"],
+                    "headline-sm": ["Plus Jakarta Sans"],
+                    "label-code": ["JetBrains Mono"],
+                    "body-sm": ["Plus Jakarta Sans"],
+                    "label-caps": ["Plus Jakarta Sans"],
+                    "display-lg": ["Plus Jakarta Sans"],
+                    "display-lg-mobile": ["Plus Jakarta Sans"],
+                    "body-md": ["Plus Jakarta Sans"],
+                    "body-lg": ["Plus Jakarta Sans"]
+            },
+            "fontSize": {
+                    "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                    "headline-sm": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                    "label-code": ["13px", {"lineHeight": "16px", "fontWeight": "500"}],
+                    "body-sm": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                    "label-caps": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "700"}],
+                    "display-lg": ["40px", {"lineHeight": "48px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                    "display-lg-mobile": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                    "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: #F8FAFC;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .sidebar-active-indicator {
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 4px;
+            background-color: #F59E0B;
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(8px);
+            border: 1px solid #E2E8F0;
+        }
+        .academic-gradient {
+            background: linear-gradient(135deg, #6B21A8 0%, #7C3AED 100%);
+        }
+    </style>
+</head>
+<body class="text-on-surface">
+<!-- Side Navigation Bar -->
+<aside class="fixed left-0 top-0 h-screen w-sidebar-width bg-[#064D37] flex flex-col py-6 shadow-sm z-50">
+<div class="px-6 mb-8">
+<h1 class="text-white font-headline-md text-headline-md font-bold tracking-tight">InduTrack KE</h1>
+<p class="text-primary-fixed text-label-caps font-label-caps mt-1">Institutional Portal</p>
+</div>
+<nav class="flex-1 px-2 space-y-1">
+<a class="relative flex items-center gap-3 bg-primary-container text-white px-4 py-3 rounded-lg transition-transform translate-x-1" href="#">
+<div class="sidebar-active-indicator"></div>
+<span class="material-symbols-outlined">dashboard</span>
+<span class="font-label-caps text-label-caps">Dashboard</span>
+</a>
+<a class="flex items-center gap-3 text-white/70 hover:text-white hover:bg-primary-hover/20 px-4 py-3 rounded-lg transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">domain</span>
+<span class="font-label-caps text-label-caps">Institutions</span>
+</a>
+<a class="flex items-center gap-3 text-white/70 hover:text-white hover:bg-primary-hover/20 px-4 py-3 rounded-lg transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">handshake</span>
+<span class="font-label-caps text-label-caps">Industry Partners</span>
+</a>
+<a class="flex items-center gap-3 text-white/70 hover:text-white hover:bg-primary-hover/20 px-4 py-3 rounded-lg transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">menu_book</span>
+<span class="font-label-caps text-label-caps">Student Logbooks</span>
+</a>
+<a class="flex items-center gap-3 text-white/70 hover:text-white hover:bg-primary-hover/20 px-4 py-3 rounded-lg transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">location_on</span>
+<span class="font-label-caps text-label-caps">Placement Tracker</span>
+</a>
+<a class="flex items-center gap-3 text-white/70 hover:text-white hover:bg-primary-hover/20 px-4 py-3 rounded-lg transition-colors duration-200" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="font-label-caps text-label-caps">Settings</span>
+</a>
+</nav>
+<div class="px-6 mb-4">
+<button class="w-full bg-[#F59E0B] hover:bg-[#D97706] text-white font-bold py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-all">
+<span class="material-symbols-outlined">add</span>
+<span class="font-label-caps text-label-caps">New Placement</span>
+</button>
+</div>
+<div class="px-2 pt-4 border-t border-white/10">
+<a class="flex items-center gap-3 text-white/70 hover:text-white px-4 py-3" href="#">
+<span class="material-symbols-outlined">help</span>
+<span class="font-label-caps text-label-caps">Help Center</span>
+</a>
+<a class="flex items-center gap-3 text-white/70 hover:text-white px-4 py-3" href="#">
+<span class="material-symbols-outlined">logout</span>
+<span class="font-label-caps text-label-caps">Logout</span>
+</a>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="ml-sidebar-width min-h-screen">
+<!-- Top Navigation Bar -->
+<header class="sticky top-0 z-40 bg-surface border-b border-border h-16 flex items-center justify-between px-margin-desktop">
+<div class="flex items-center flex-1 max-w-xl">
+<div class="relative w-full">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline">search</span>
+<input class="w-full bg-background border border-border rounded-lg pl-10 pr-4 py-2 text-body-md focus:ring-2 focus:ring-primary-subtle focus:border-primary outline-none transition-all" placeholder="Search students, companies, or logs..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-6">
+<button class="text-on-surface-variant hover:text-primary relative transition-colors">
+<span class="material-symbols-outlined">notifications</span>
+<span class="absolute top-0 right-0 w-2 h-2 bg-error rounded-full"></span>
+</button>
+<button class="text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined">apps</span>
+</button>
+<div class="flex items-center gap-3 pl-4 border-l border-border">
+<div class="text-right hidden sm:block">
+<p class="text-body-sm font-bold text-on-surface">Dr. Jane Mwangi</p>
+<p class="text-label-caps text-on-surface-variant">Senior Supervisor</p>
+</div>
+<img class="w-10 h-10 rounded-full border-2 border-primary object-cover" data-alt="A professional headshot of a middle-aged Kenyan female academic, Dr. Jane Mwangi, wearing elegant business attire and spectacles. She has a warm, confident expression. The background is a blurred academic office with books and a wooden desk, reflecting a high-trust institutional environment. The lighting is soft and professional." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAUNnvKLf2oZNfEx1HOqKewQd0zvdXDukZ_7z651E8b_Ae7VaBp9tmR311wGJjpH2V1D01akYPE_kR67_qauwy9_MxqS3ZtnVT02m-Ne41GdLCNgh2RHM_vz8oznR6TLCCuF-SxiHFlUXFiGKVt93KfpvdZ9gRWdSkXElq8fxt1N030jzNjmI8GCnCvhfXaQNxBDZ4bQKxHSL_pWcQcC-vzA4Croa-aVnV5DBTkVScFP9O3ml67WkxHJMwjvGomkeJojC4g3UhR0RCv"/>
+</div>
+</div>
+</header>
+<!-- Dashboard Header -->
+<section class="academic-gradient px-margin-desktop py-12 text-white relative overflow-hidden">
+<div class="relative z-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
+<div>
+<h1 class="font-display-lg text-display-lg font-bold">Academic Supervisor — Dashboard</h1>
+<p class="text-body-lg opacity-90">University of Nairobi — School of Engineering</p>
+</div>
+<button class="bg-[#F59E0B] hover:bg-[#D97706] text-white px-8 py-4 rounded-xl font-bold flex items-center gap-2 shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-1">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">calendar_today</span>
+                    Schedule Field Visit
+                </button>
+</div>
+<!-- Decorative Element -->
+<div class="absolute -right-20 -bottom-20 w-80 h-80 bg-white/10 rounded-full blur-3xl"></div>
+</section>
+<div class="p-margin-desktop space-y-gutter max-w-container-max mx-auto">
+<!-- Row 1: Stats Grid -->
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-gutter">
+<!-- Stat Card: My Students -->
+<div class="bg-surface border border-border p-6 rounded-xl flex items-center gap-4 hover:shadow-md transition-shadow">
+<div class="w-12 h-12 bg-primary/10 text-primary flex items-center justify-center rounded-lg">
+<span class="material-symbols-outlined text-3xl">group</span>
+</div>
+<div>
+<p class="text-label-caps text-on-surface-variant uppercase">My Students</p>
+<p class="text-headline-md font-bold">12</p>
+</div>
+</div>
+<!-- Stat Card: Logbooks to Review -->
+<div class="bg-surface border border-[#F59E0B]/30 p-6 rounded-xl flex items-center gap-4 hover:shadow-md transition-shadow">
+<div class="w-12 h-12 bg-[#F59E0B]/10 text-[#F59E0B] flex items-center justify-center rounded-lg">
+<span class="material-symbols-outlined text-3xl">rate_review</span>
+</div>
+<div>
+<div class="flex items-center gap-2">
+<p class="text-label-caps text-on-surface-variant uppercase">Logbooks to Review</p>
+<span class="flex h-2 w-2 rounded-full bg-[#F59E0B] animate-pulse"></span>
+</div>
+<p class="text-headline-md font-bold text-[#F59E0B]">8</p>
+</div>
+</div>
+<!-- Stat Card: Field Visits -->
+<div class="bg-surface border border-border p-6 rounded-xl flex flex-col gap-3 hover:shadow-md transition-shadow">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 bg-secondary/10 text-secondary flex items-center justify-center rounded-lg">
+<span class="material-symbols-outlined">location_on</span>
+</div>
+<p class="text-label-caps text-on-surface-variant uppercase">Field Visits</p>
+</div>
+<p class="font-bold text-on-surface">4/12</p>
+</div>
+<div class="w-full bg-surface-container rounded-full h-2">
+<div class="bg-secondary h-2 rounded-full" style="width: 33%"></div>
+</div>
+</div>
+<!-- Stat Card: Grades Pending -->
+<div class="bg-surface border border-error/30 p-6 rounded-xl flex items-center gap-4 hover:shadow-md transition-shadow">
+<div class="w-12 h-12 bg-error/10 text-error flex items-center justify-center rounded-lg">
+<span class="material-symbols-outlined text-3xl">grading</span>
+</div>
+<div>
+<p class="text-label-caps text-on-surface-variant uppercase">Grades Pending</p>
+<div class="flex items-center gap-2">
+<p class="text-headline-md font-bold text-error">2</p>
+<span class="bg-error text-white text-[10px] font-bold px-2 py-0.5 rounded-full">ACTION REQUIRED</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Row 2: Main Layout -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-gutter">
+<!-- Left Column: Primary Content -->
+<div class="lg:col-span-2 space-y-gutter">
+<!-- My Students Table Card -->
+<div class="bg-surface border border-border rounded-xl shadow-sm overflow-hidden">
+<div class="px-6 py-4 border-b border-border flex items-center justify-between">
+<h2 class="font-headline-sm text-headline-sm text-on-surface">Supervised Students</h2>
+<button class="text-primary font-bold text-body-sm hover:underline">View All</button>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead class="bg-background">
+<tr>
+<th class="px-6 py-3 text-label-caps text-on-surface-variant font-label-caps">Student</th>
+<th class="px-6 py-3 text-label-caps text-on-surface-variant font-label-caps">Company</th>
+<th class="px-6 py-3 text-label-caps text-on-surface-variant font-label-caps">Progress</th>
+<th class="px-6 py-3 text-label-caps text-on-surface-variant font-label-caps">Visit Status</th>
+<th class="px-6 py-3 text-label-caps text-on-surface-variant font-label-caps">Score</th>
+<th class="px-6 py-3 text-label-caps text-on-surface-variant font-label-caps">Action</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-border">
+<tr class="hover:bg-background transition-colors group">
+<td class="px-6 py-4">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-primary-subtle text-primary flex items-center justify-center font-bold text-xs">JO</div>
+<div>
+<p class="text-body-sm font-bold">John Otieno</p>
+<p class="text-[11px] text-on-surface-variant">Reg: EN271/0142/19</p>
+</div>
+</div>
+</td>
+<td class="px-6 py-4 text-body-sm text-on-surface-variant font-medium">Safaricom PLC</td>
+<td class="px-6 py-4">
+<div class="flex items-center gap-2">
+<div class="w-16 bg-surface-container rounded-full h-1.5">
+<div class="bg-primary h-1.5 rounded-full" style="width: 75%"></div>
+</div>
+<span class="text-[11px] font-bold text-on-surface-variant">Wk 9</span>
+</div>
+</td>
+<td class="px-6 py-4">
+<div class="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-[#ECFDF5] text-[#0A6E4F] text-[10px] font-bold">
+<span class="w-1.5 h-1.5 rounded-full bg-[#0A6E4F]"></span>
+                                                COMPLETED
+                                            </div>
+</td>
+<td class="px-6 py-4 font-label-code text-label-code font-bold">84/100</td>
+<td class="px-6 py-4">
+<div class="flex gap-2">
+<button class="p-1.5 text-on-surface-variant hover:text-primary transition-colors" title="Grade Student">
+<span class="material-symbols-outlined text-lg">edit_note</span>
+</button>
+<button class="p-1.5 text-on-surface-variant hover:text-primary transition-colors" title="Send Comment">
+<span class="material-symbols-outlined text-lg">chat_bubble</span>
+</button>
+</div>
+</td>
+</tr>
+<tr class="hover:bg-background transition-colors group">
+<td class="px-6 py-4">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-secondary-container/20 text-secondary flex items-center justify-center font-bold text-xs">SM</div>
+<div>
+<p class="text-body-sm font-bold">Sarah Mutua</p>
+<p class="text-[11px] text-on-surface-variant">Reg: EN271/0155/19</p>
+</div>
+</div>
+</td>
+<td class="px-6 py-4 text-body-sm text-on-surface-variant font-medium">KCB Bank</td>
+<td class="px-6 py-4">
+<div class="flex items-center gap-2">
+<div class="w-16 bg-surface-container rounded-full h-1.5">
+<div class="bg-primary h-1.5 rounded-full" style="width: 45%"></div>
+</div>
+<span class="text-[11px] font-bold text-on-surface-variant">Wk 5</span>
+</div>
+</td>
+<td class="px-6 py-4">
+<div class="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-secondary-fixed/30 text-secondary text-[10px] font-bold">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+                                                PENDING
+                                            </div>
+</td>
+<td class="px-6 py-4 font-label-code text-label-code font-bold">--</td>
+<td class="px-6 py-4">
+<div class="flex gap-2">
+<button class="p-1.5 text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-lg">edit_note</span>
+</button>
+<button class="p-1.5 text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-lg">chat_bubble</span>
+</button>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<!-- Logbook Review Queue -->
+<div class="space-y-4">
+<div class="flex items-center justify-between">
+<h2 class="font-headline-sm text-headline-sm text-on-surface">Logbook Review Queue</h2>
+<span class="text-label-caps text-on-surface-variant">Sorted by Oldest First</span>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<!-- Review Card 1 -->
+<div class="bg-surface border border-border p-5 rounded-xl flex flex-col justify-between hover:border-primary/50 transition-all">
+<div class="flex justify-between items-start mb-4">
+<div>
+<h3 class="text-body-md font-bold text-on-surface">Week 8: Network Infrastructure</h3>
+<p class="text-body-sm text-on-surface-variant">Student: John Otieno</p>
+</div>
+<span class="text-label-code text-[10px] bg-background px-2 py-1 rounded font-bold">2 DAYS AGO</span>
+</div>
+<div class="flex items-center justify-between mt-auto pt-4 border-t border-border">
+<p class="text-[11px] font-medium text-on-surface-variant">Status: <span class="text-error">Awaiting Feedback</span></p>
+<button class="bg-[#0A6E4F] hover:bg-primary-hover text-white text-[11px] font-bold px-4 py-2 rounded-lg flex items-center gap-1 transition-colors">
+                                        Review <span class="material-symbols-outlined text-sm">chevron_right</span>
+</button>
+</div>
+</div>
+<!-- Review Card 2 -->
+<div class="bg-surface border border-border p-5 rounded-xl flex flex-col justify-between hover:border-primary/50 transition-all">
+<div class="flex justify-between items-start mb-4">
+<div>
+<h3 class="text-body-md font-bold text-on-surface">Week 4: API Integration</h3>
+<p class="text-body-sm text-on-surface-variant">Student: Sarah Mutua</p>
+</div>
+<span class="text-label-code text-[10px] bg-background px-2 py-1 rounded font-bold">5 HOURS AGO</span>
+</div>
+<div class="flex items-center justify-between mt-auto pt-4 border-t border-border">
+<p class="text-[11px] font-medium text-on-surface-variant">Status: <span class="text-primary">New Submission</span></p>
+<button class="bg-[#0A6E4F] hover:bg-primary-hover text-white text-[11px] font-bold px-4 py-2 rounded-lg flex items-center gap-1 transition-colors">
+                                        Review <span class="material-symbols-outlined text-sm">chevron_right</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Right Column: Sidebar Panels -->
+<div class="space-y-gutter">
+<!-- Field Visits Card -->
+<div class="bg-surface border border-border rounded-xl shadow-sm overflow-hidden">
+<div class="px-6 py-4 border-b border-border bg-background/50">
+<h2 class="font-headline-sm text-headline-sm text-on-surface">Upcoming Visits</h2>
+</div>
+<!-- Today Alert -->
+<div class="bg-[#F59E0B]/10 border-y border-[#F59E0B]/20 px-6 py-3 flex items-center gap-3">
+<span class="material-symbols-outlined text-[#F59E0B]" style="font-variation-settings: 'FILL' 1;">warning</span>
+<p class="text-body-sm font-bold text-[#B45309]">Visit today at KCB Bank (Sarah)</p>
+</div>
+<div class="p-6 space-y-4">
+<!-- Visit Item 1 -->
+<div class="flex gap-4">
+<div class="flex flex-col items-center">
+<div class="w-10 h-10 bg-primary/10 text-primary rounded-lg flex flex-col items-center justify-center">
+<span class="text-[10px] font-bold uppercase leading-none">Oct</span>
+<span class="text-lg font-bold leading-none">12</span>
+</div>
+<div class="w-px h-8 bg-border my-1"></div>
+</div>
+<div class="flex-1">
+<h4 class="text-body-sm font-bold">KenGen Head Office</h4>
+<p class="text-[11px] text-on-surface-variant">Student: Michael Kamau</p>
+<p class="text-[11px] font-medium text-primary mt-1">10:00 AM — Scheduled</p>
+</div>
+</div>
+<!-- Visit Item 2 -->
+<div class="flex gap-4">
+<div class="flex flex-col items-center">
+<div class="w-10 h-10 bg-surface-container text-on-surface-variant rounded-lg flex flex-col items-center justify-center">
+<span class="text-[10px] font-bold uppercase leading-none">Oct</span>
+<span class="text-lg font-bold leading-none">08</span>
+</div>
+</div>
+<div class="flex-1 opacity-60">
+<h4 class="text-body-sm font-bold">Equity Bank HQ</h4>
+<p class="text-[11px] text-on-surface-variant">Student: Jane Doe</p>
+<p class="text-[11px] font-medium text-on-surface-variant mt-1">Completed</p>
+</div>
+</div>
+<button class="w-full text-center py-2 text-primary font-bold text-body-sm hover:bg-primary-subtle rounded-lg transition-colors">
+                                View Full Schedule
+                            </button>
+</div>
+</div>
+<!-- Messages Preview Card -->
+<div class="bg-surface border border-border rounded-xl shadow-sm overflow-hidden">
+<div class="px-6 py-4 border-b border-border flex items-center justify-between">
+<h2 class="font-headline-sm text-headline-sm text-on-surface">Messages</h2>
+<span class="bg-error text-white text-[10px] font-bold px-1.5 py-0.5 rounded">3 NEW</span>
+</div>
+<div class="divide-y divide-border">
+<!-- Message 1 -->
+<a class="block p-4 hover:bg-background transition-colors" href="#">
+<div class="flex gap-3">
+<img class="w-10 h-10 rounded-full object-cover" data-alt="Close-up profile photo of a young male professional student with short hair, wearing a clean white polo shirt. Modern office office lighting casting a soft glow. High-end, data-driven corporate aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDTKNG9dbLfSmuSZQoEGrB3lcfU9zbLQkTzEsAB7FgNdSL3fg0-gaxWraJ774AYhDzR9PlClCH3Htphkg2lEj8uGhtxUORWx2eM7Wm2ciPtIAptaQbHTqkM7I-WwgUjId7tpIIxhVKnjCPyA8w_EIYMOVwxv5ZIebraYddXr1luqRXS-p_Hmb7e54sKKQxKTuhLIf2-6o5nTi3c0RXT92yRtfPrwo0Wv_FqQxfHMAqpq3nF1KYh3HFLd27P0xlEB5hx9ZwEVeGe5d4W"/>
+<div class="flex-1 min-w-0">
+<div class="flex justify-between items-start">
+<p class="text-body-sm font-bold truncate">John Otieno</p>
+<span class="text-[10px] text-on-surface-variant">10m ago</span>
+</div>
+<p class="text-[11px] text-on-surface-variant line-clamp-1">Dr. Jane, I've updated the network diagram in my logbook...</p>
+</div>
+</div>
+</a>
+<!-- Message 2 -->
+<a class="block p-4 hover:bg-background transition-colors" href="#">
+<div class="flex gap-3">
+<img class="w-10 h-10 rounded-full object-cover" data-alt="A portrait of an industry supervisor, a middle-aged man in business formal, appearing reliable and professional. Kenyan corporate setting, blurred high-tech workspace background. Consistent forest green and neutral brand colors." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCDLsa8HPeGkpCZO3r4L-Q-CCA8ORVBWj1GR7QvAMv8I_qPtBPi4_2naaoY0nZLtwMOdDcfbVtewtUPlHuxP8sNdYcp9R8Ksou3mKmJwGMrjqsW9n87GXtGxMW1NztVA0AbniZ2G8pYl5O2kTwjicgkrH45pFQMmw49C2sHh9xGf7Jvf8yK28i3tUYgFfwINfuIvlLYLZtQj-n04L1oyz0iJBq3EYO6UJUWL9xegg7J7t-3fF0PR_1iVVP57UL7n858xijv_RboyMW7"/>
+<div class="flex-1 min-w-0">
+<div class="flex justify-between items-start">
+<p class="text-body-sm font-bold truncate">Mark K. (Safaricom)</p>
+<span class="text-[10px] text-on-surface-variant">1h ago</span>
+</div>
+<p class="text-[11px] text-on-surface-variant line-clamp-1">Confirmation for John's mid-term assessment review.</p>
+</div>
+</div>
+</a>
+<!-- Message 3 -->
+<a class="block p-4 hover:bg-background transition-colors" href="#">
+<div class="flex gap-3">
+<div class="w-10 h-10 rounded-full bg-secondary-container/20 text-secondary flex items-center justify-center font-bold text-xs">SM</div>
+<div class="flex-1 min-w-0">
+<div class="flex justify-between items-start">
+<p class="text-body-sm font-bold truncate">Sarah Mutua</p>
+<span class="text-[10px] text-on-surface-variant">3h ago</span>
+</div>
+<p class="text-[11px] text-on-surface-variant line-clamp-1">Can we reschedule the visit to KCB? I have a...</p>
+</div>
+</div>
+</a>
+</div>
+<div class="p-4 bg-background/30 text-center">
+<button class="text-primary font-bold text-body-sm hover:underline">Go to Inbox</button>
+</div>
+</div>
+<!-- Academic Progress Illustration -->
+<div class="relative bg-[#064D37] rounded-xl p-6 overflow-hidden text-white group">
+<div class="relative z-10">
+<h3 class="font-headline-sm text-headline-sm mb-2">Portfolio Quality</h3>
+<p class="text-body-sm opacity-80 mb-4">Your students are performing 15% above the institutional average this semester.</p>
+<div class="flex items-center gap-2 text-accent-hover font-bold text-body-sm">
+<span>Analyze Trends</span>
+<span class="material-symbols-outlined group-hover:translate-x-1 transition-transform">trending_up</span>
+</div>
+</div>
+<div class="absolute -right-8 -bottom-8 opacity-20 transform rotate-12 group-hover:scale-110 transition-transform duration-500">
+<span class="material-symbols-outlined text-[120px]">school</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- Contextual FAB for quick actions -->
+<button class="fixed right-8 bottom-8 w-14 h-14 bg-primary text-white rounded-full shadow-2xl flex items-center justify-center hover:bg-primary-hover hover:scale-110 active:scale-95 transition-all z-50">
+<span class="material-symbols-outlined text-3xl">add</span>
+</button>
+<script>
+        // Simple micro-interaction for stats cards
+        document.querySelectorAll('.grid > div').forEach(card => {
+            card.addEventListener('mouseenter', () => {
+                card.style.transform = 'translateY(-2px)';
+            });
+            card.addEventListener('mouseleave', () => {
+                card.style.transform = 'translateY(0px)';
+            });
+        });
+
+        // Search bar focus effect
+        const searchInput = document.querySelector('input[type="text"]');
+        searchInput.addEventListener('focus', () => {
+            searchInput.parentElement.classList.add('ring-2', 'ring-primary-subtle');
+        });
+        searchInput.addEventListener('blur', () => {
+            searchInput.parentElement.classList.remove('ring-2', 'ring-primary-subtle');
+        });
+    </script>
+</body></html>

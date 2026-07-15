@@ -39,7 +39,7 @@ function Login() {
     e.preventDefault();
     setError('');
     try {
-      await api.get('/sanctum/csrf-cookie'); // Initialize CSRF cookie
+      await api.get('/sanctum/csrf-cookie', { baseURL: 'http://localhost:8000' }); // Initialize CSRF cookie
       const res = await api.post('/auth/login', { email, password });
       
       if (res.data['2fa_required']) {
@@ -175,7 +175,7 @@ function Register() {
     e.preventDefault();
     setError('');
     try {
-      await api.get('/sanctum/csrf-cookie'); // CSRF protection
+      await api.get('http://localhost:8000/sanctum/csrf-cookie'); // CSRF protection
       await api.post('/auth/register', formData);
       setSuccess(true);
     } catch (err) {

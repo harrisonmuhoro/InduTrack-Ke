@@ -1,149 +1,563 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { GraduationCap, LogOut, Book, MessageSquare, UserCircle } from 'lucide-react';
 import api from '../axios';
 import { useAuth } from '../context/AuthContext';
+import NotificationBell from '../components/NotificationBell';
+import AppsMenu from '../components/AppsMenu';
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+const initials = (name = '') =>
+    name
+        .split(' ')
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((n) => n[0].toUpperCase())
+        .join('') || '?';
+
+const relativeTime = (dateStr) => {
+    if (!dateStr) return '';
+    const diff = Date.now() - new Date(dateStr).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 60) return `${Math.max(mins, 1)}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    const days = Math.floor(hrs / 24);
+    return `${days}d ago`;
+};
+
+const queueAge = (dateStr) => {
+    if (!dateStr) return '';
+    const diff = Date.now() - new Date(dateStr).getTime();
+    const hrs = Math.floor(diff / 3600000);
+    if (hrs < 24) return `${Math.max(hrs, 1)} HOURS AGO`;
+    const days = Math.floor(hrs / 24);
+    return `${days} DAY${days > 1 ? 'S' : ''} AGO`;
+};
+
+const TOTAL_WEEKS = 12;
 
 export default function SupervisorDashboard() {
-  const { role, context, logout } = useAuth();
+    const { user, context, logout } = useAuth();
+    const navigate = useNavigate();
 
-  const [placements, setPlacements] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedPlacement, setSelectedPlacement] = useState(null);
-  const [comment, setComment] = useState('');
-  const navigate = useNavigate();
+    const [placements, setPlacements] = useState([]);
+    const [entriesMap, setEntriesMap] = useState({}); // placementId -> logbook entries[]
+    const [visits, setVisits] = useState([]);
+    const [conversations, setConversations] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [reviewing, setReviewing] = useState(null); // entry id being reviewed
+    const [banner, setBanner] = useState(null); // { type, text }
 
-  useEffect(() => {
-    api.get('/supervisors/students')
-      .then(res => setPlacements(res.data))
-      .catch(err => console.error(err))
-      .finally(() => setLoading(false));
-  }, []);
+    // Header search + students table toggle + scroll target for "Analyze Trends"
+    const [search, setSearch] = useState('');
+    const [showAllStudents, setShowAllStudents] = useState(false);
+    const studentsTableRef = useRef(null);
 
-  const openLogbook = async (placementId) => {
-    const res = await api.get(`/supervisors/placements/${placementId}/logbook`);
-    setSelectedPlacement(res.data);
-  };
+    useEffect(() => {
+        fetchData();
+    }, []);
 
-  const submitComment = async (entryId) => {
-    if (!comment.trim()) return;
-    await api.post(`/logbooks/${entryId}/comments`, { comment });
-    setComment('');
-    // Refresh placement
-    openLogbook(selectedPlacement.id);
-  };
+    const fetchData = async () => {
+        setLoading(true);
+        try {
+            const [studentsRes, visitsRes, convRes] = await Promise.allSettled([
+                api.get('/supervisors/students'),
+                api.get('/field-visits'),
+                api.get('/messages/conversations'),
+            ]);
 
-  const handleLogout = async () => {
-    await logout();
-    navigate('/login');
-  };
+            const list =
+                studentsRes.status === 'fulfilled' && Array.isArray(studentsRes.value.data)
+                    ? studentsRes.value.data
+                    : [];
+            setPlacements(list);
+            setVisits(visitsRes.status === 'fulfilled' ? visitsRes.value.data || [] : []);
+            setConversations(convRes.status === 'fulfilled' ? convRes.value.data || [] : []);
 
-  return (
-    <div className="min-h-screen bg-[var(--color-bg)] flex">
-      <div className="w-64 bg-[var(--color-primary-dark)] text-white p-6 flex flex-col flex-shrink-0">
-        <h1 className="text-xl font-bold mb-8">Supervisor Portal</h1>
-        <nav className="flex-1 space-y-1">
-          <Link to="/supervisor" className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[var(--color-primary)] text-white text-sm">
-            <GraduationCap size={18} /> My Students
-          </Link>
-          <Link to="/messages" className="flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-[var(--color-primary)] text-white/90 text-sm">
-            <MessageSquare size={18} /> Messages
-          </Link>
-          <Link to="/profile" className="flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-[var(--color-primary)] text-white/90 text-sm">
-            <UserCircle size={18} /> My Profile
-          </Link>
-        </nav>
-        <button onClick={handleLogout} className="flex items-center gap-2 w-full text-left px-4 py-2 rounded-lg text-red-300 hover:bg-red-500/20 mt-4 text-sm transition">
-          <LogOut size={18} /> Logout
-        </button>
-      </div>
+            // Load logbook entries per placement (bounded to first 10 to avoid N+1 overload)
+            const subset = list.slice(0, 10);
+            const results = await Promise.allSettled(
+                subset.map((p) => api.get(`/supervisors/placements/${p.id}/logbook`))
+            );
+            const entMap = {};
+            results.forEach((r, idx) => {
+                if (r.status === 'fulfilled') {
+                    entMap[subset[idx].id] = r.value.data?.logbook_entries || [];
+                }
+            });
+            setEntriesMap(entMap);
+        } catch (err) {
+            console.error(err);
+        } finally {
+            setLoading(false);
+        }
+    };
 
-      <div className="flex-1 flex flex-col h-screen overflow-hidden">
-        <header className="bg-[var(--color-surface)] border-b border-[var(--color-border)] h-16 flex items-center justify-between px-8 shadow-sm flex-shrink-0">
-          <h2 className="text-xl font-bold text-[var(--color-primary-dark)]">Supervisor Portal</h2>
-          <div className="text-sm font-medium text-[var(--color-text-secondary)]">{context}</div>
-        </header>
+    const handleLogout = async () => {
+        await logout();
+        navigate('/login');
+    };
 
-        <div className="flex-1 flex overflow-hidden">
-          {/* Students list */}
-          <div className="w-96 p-6 border-r border-[var(--color-border)] overflow-y-auto">
-            <h2 className="text-xl font-bold text-[var(--color-text-primary)] mb-4">Assigned Students</h2>
-            {loading && <p className="text-[var(--color-text-secondary)]">Loading...</p>}
-            <div className="space-y-3">
-              {placements.map(p => (
-                <button key={p.id} onClick={() => openLogbook(p.id)} className={`w-full text-left p-4 rounded-xl border transition ${selectedPlacement?.id === p.id ? 'border-[var(--color-primary)] bg-green-50' : 'border-[var(--color-border)] bg-[var(--color-surface)] hover:border-[var(--color-primary-light)]'}`}>
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-full bg-[var(--color-primary-light)] flex items-center justify-center text-white font-bold">
-                      {p.student?.user?.name?.charAt(0) ?? 'S'}
-                    </div>
-                    <div>
-                      <p className="font-bold text-sm text-[var(--color-text-primary)]">{p.student?.user?.name}</p>
-                      <p className="text-xs text-[var(--color-text-secondary)]">{p.student?.reg_number}</p>
-                      <span className="inline-block mt-1 bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded-full">{p.status}</span>
-                    </div>
-                  </div>
+    // ── Derived data ─────────────────────────────────────────────────────────
+    const studentName = (p) => p.student?.user?.name || 'Student';
+    const latestWeek = (p) =>
+        (entriesMap[p.id] || []).reduce((max, e) => Math.max(max, e.week_number || 0), 0);
+
+    const visitForPlacement = (placementId) =>
+        visits.find((v) => v.placement_id === placementId);
+
+    const pendingEntries = placements
+        .flatMap((p) =>
+            (entriesMap[p.id] || [])
+                .filter((e) => ['draft', 'submitted'].includes(e.status))
+                .map((e) => ({ ...e, _student: studentName(p) }))
+        )
+        .sort((a, b) => new Date(a.created_at || a.entry_date) - new Date(b.created_at || b.entry_date));
+
+    const completedVisits = visits.filter((v) => v.status === 'completed').length;
+    const visitPct = visits.length ? Math.round((completedVisits / visits.length) * 100) : 0;
+
+    const gradesPending = placements.filter(
+        (p) => p.academic_grade == null && ['active', 'completed'].includes(p.status)
+    ).length;
+
+    const upcomingVisits = [...visits]
+        .sort((a, b) => new Date(a.visit_date) - new Date(b.visit_date))
+        .filter((v) => v.status !== 'cancelled')
+        .slice(0, 3);
+
+    const todayStr = new Date().toDateString();
+    const visitToday = visits.find(
+        (v) => v.status === 'scheduled' && new Date(v.visit_date).toDateString() === todayStr
+    );
+
+    const totalUnread = conversations.reduce((sum, c) => sum + (c.unread_count || 0), 0);
+
+    // Students table: filter by header search, then limit unless "View All" toggled
+    const filteredPlacements = placements.filter((p) =>
+        studentName(p).toLowerCase().includes(search.trim().toLowerCase())
+    );
+    const visiblePlacements = showAllStudents ? filteredPlacements : filteredPlacements.slice(0, 5);
+
+    // ── Actions ──────────────────────────────────────────────────────────────
+    const handleReview = async (entryId) => {
+        setReviewing(entryId);
+        setBanner(null);
+        try {
+            await api.post(`/logbooks/${entryId}/review`, {
+                action: 'approved',
+                comment: 'Reviewed and approved by academic supervisor.',
+            });
+            setBanner({ type: 'success', text: 'Logbook entry approved.' });
+            fetchData();
+        } catch (err) {
+            setBanner({
+                type: 'error',
+                text: err.response?.data?.message || 'Failed to review entry.',
+            });
+        } finally {
+            setReviewing(null);
+        }
+    };
+
+    const handleGrade = async (placement) => {
+        const input = window.prompt(
+            `Enter final grade (0-100) for ${studentName(placement)}:`,
+            placement.academic_grade ?? ''
+        );
+        if (input === null || input === '') return;
+        const grade = Number(input);
+        if (Number.isNaN(grade) || grade < 0 || grade > 100) {
+            setBanner({ type: 'error', text: 'Grade must be a number between 0 and 100.' });
+            return;
+        }
+        try {
+            await api.post(`/placements/${placement.id}/grade`, { grade });
+            setBanner({ type: 'success', text: `Grade recorded for ${studentName(placement)}.` });
+            fetchData();
+        } catch (err) {
+            setBanner({
+                type: 'error',
+                text: err.response?.data?.message || 'Failed to record grade.',
+            });
+        }
+    };
+
+    return (
+        <div className="font-body-md text-body-md overflow-x-hidden min-h-screen bg-[var(--color-bg)]">
+
+
+<aside className="fixed left-0 top-0 h-screen w-sidebar-width bg-[#064D37] flex flex-col py-6 shadow-sm z-50">
+<div className="px-6 mb-8">
+<h1 className="text-white font-headline-md text-headline-md font-bold tracking-tight">InduTrack KE</h1>
+<p className="text-primary-fixed text-label-caps font-label-caps mt-1">Institutional Portal</p>
+</div>
+<nav className="flex-1 px-2 space-y-1">
+<Link className="relative flex items-center gap-3 bg-primary-container text-white px-4 py-3 rounded-lg transition-transform translate-x-1" to="/supervisor">
+<div className="sidebar-active-indicator"></div>
+<span className="material-symbols-outlined">dashboard</span>
+<span className="font-label-caps text-label-caps">Dashboard</span>
+</Link>
+<Link className="flex items-center gap-3 text-white/70 hover:text-white hover:bg-primary-hover/20 px-4 py-3 rounded-lg transition-colors duration-200" to="/supervisor/visits">
+<span className="material-symbols-outlined">location_on</span>
+<span className="font-label-caps text-label-caps">Field Visits</span>
+</Link>
+<Link className="flex items-center gap-3 text-white/70 hover:text-white hover:bg-primary-hover/20 px-4 py-3 rounded-lg transition-colors duration-200" to="/messages">
+<span className="material-symbols-outlined">menu_book</span>
+<span className="font-label-caps text-label-caps">Messages</span>
+</Link>
+<Link className="flex items-center gap-3 text-white/70 hover:text-white hover:bg-primary-hover/20 px-4 py-3 rounded-lg transition-colors duration-200" to="/profile">
+<span className="material-symbols-outlined">settings</span>
+<span className="font-label-caps text-label-caps">Settings</span>
+</Link>
+</nav>
+<div className="px-6 mb-4">
+<button className="w-full bg-[#F59E0B] hover:bg-[#D97706] text-white font-bold py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-all" onClick={() => navigate('/supervisor/visits')} type="button">
+<span className="material-symbols-outlined">add</span>
+<span className="font-label-caps text-label-caps">New Field Visit</span>
+</button>
+</div>
+<div className="px-2 pt-4 border-t border-white/10">
+<Link className="flex items-center gap-3 text-white/70 hover:text-white px-4 py-3" to="/profile">
+<span className="material-symbols-outlined">help</span>
+<span className="font-label-caps text-label-caps">Help Center</span>
+</Link>
+<button className="flex items-center gap-3 text-white/70 hover:text-white px-4 py-3 text-left w-full" onClick={handleLogout} type="button">
+<span className="material-symbols-outlined">logout</span>
+<span className="font-label-caps text-label-caps">Logout</span>
+</button>
+</div>
+</aside>
+
+<main className="ml-sidebar-width min-h-screen">
+
+<header className="sticky top-0 z-40 bg-surface border-b border-border h-16 flex items-center justify-between px-margin-desktop">
+<div className="flex items-center flex-1 max-w-xl">
+<div className="relative w-full">
+<span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline">search</span>
+<input className="w-full bg-background border border-border rounded-lg pl-10 pr-4 py-2 text-body-md focus:ring-2 focus:ring-primary-subtle focus:border-primary outline-none transition-all" placeholder="Search students, companies, or logs..." type="text" value={search} onChange={(e) => setSearch(e.target.value)}/>
+</div>
+</div>
+<div className="flex items-center gap-6">
+<NotificationBell buttonClassName="text-on-surface-variant hover:text-primary relative transition-colors"/>
+<AppsMenu
+    buttonClassName="text-on-surface-variant hover:text-primary transition-colors"
+    links={[
+        { to: '/supervisor', icon: 'dashboard', label: 'Dashboard' },
+        { to: '/supervisor/visits', icon: 'tour', label: 'Field Visits' },
+        { to: '/messages', icon: 'mail', label: 'Messages' },
+        { to: '/profile', icon: 'person', label: 'Profile' },
+    ]}
+/>
+<div className="flex items-center gap-3 pl-4 border-l border-border">
+<div className="text-right hidden sm:block">
+<p className="text-body-sm font-bold text-on-surface">{user?.name || 'Supervisor'}</p>
+<p className="text-label-caps text-on-surface-variant">{context || 'Academic Supervisor'}</p>
+</div>
+<div className="w-10 h-10 rounded-full border-2 border-primary bg-primary-subtle text-primary flex items-center justify-center font-bold">{initials(user?.name)}</div>
+</div>
+</div>
+</header>
+
+<section className="academic-gradient px-margin-desktop py-12 text-white relative overflow-hidden">
+<div className="relative z-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
+<div>
+<h1 className="font-display-lg text-display-lg font-bold">Academic Supervisor — Dashboard</h1>
+<p className="text-body-lg opacity-90">{context || 'Institutional Supervision Portal'}</p>
+</div>
+<button className="bg-[#F59E0B] hover:bg-[#D97706] text-white px-8 py-4 rounded-xl font-bold flex items-center gap-2 shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-1" onClick={() => navigate('/supervisor/visits')} type="button">
+<span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>calendar_today</span>
+                    Schedule Field Visit
                 </button>
-              ))}
-              {!loading && placements.length === 0 && (
-                <p className="text-[var(--color-text-secondary)]">No students assigned yet.</p>
-              )}
-            </div>
-          </div>
+</div>
 
-          {/* Logbook view */}
-          <div className="flex-1 p-6 overflow-y-auto">
-            {!selectedPlacement ? (
-              <div className="flex items-center justify-center h-full text-[var(--color-text-secondary)]">
-                Select a student to view their logbook.
-              </div>
-            ) : (
-              <>
-              <h3 className="flex items-center gap-2 text-xl font-bold text-[var(--color-text-primary)] mb-4">
-                <Book size={24} /> Logbook — {selectedPlacement.student?.user?.name}
-              </h3>
-              <div className="space-y-4">
-                {selectedPlacement.logbook_entries?.map(entry => (
-                  <div key={entry.id} className="bg-[var(--color-surface)] p-5 rounded-xl border border-[var(--color-border)]">
-                    <div className="flex justify-between mb-2">
-                      <span className="font-bold text-[var(--color-primary)]">Week {entry.week_number}</span>
-                      <span className="text-sm text-[var(--color-text-secondary)]">{entry.entry_date}</span>
-                    </div>
-                    <p className="text-[var(--color-text-primary)] mb-1"><strong>Activities:</strong> {entry.activities}</p>
-                    {entry.lessons_learned && <p className="text-[var(--color-text-secondary)] text-sm"><strong>Lessons:</strong> {entry.lessons_learned}</p>}
-                    
-                    {/* Comments */}
-                    {entry.comments?.length > 0 && (
-                      <div className="mt-3 pt-3 border-t border-[var(--color-border)] space-y-2">
-                        {entry.comments.map(c => (
-                          <div key={c.id} className="bg-blue-50 px-3 py-2 rounded-lg text-sm">
-                            <span className="font-medium">{c.user?.name}:</span> {c.comment}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    
-                    {/* Add Comment */}
-                    <div className="mt-3 flex gap-2">
-                      <input
-                        type="text"
-                        className="flex-1 border border-[var(--color-border)] rounded-lg px-3 py-1.5 text-sm"
-                        placeholder="Add a comment..."
-                        value={comment}
-                        onChange={e => setComment(e.target.value)}
-                      />
-                      <button onClick={() => submitComment(entry.id)} className="bg-[var(--color-primary)] text-white px-3 py-1.5 rounded-lg text-sm">Send</button>
-                    </div>
-                  </div>
-                ))}
-                {selectedPlacement.logbook_entries?.length === 0 && (
-                  <p className="text-[var(--color-text-secondary)]">No logbook entries yet.</p>
-                )}
-              </div>
-            </>
-          )}
+<div className="absolute -right-20 -bottom-20 w-80 h-80 bg-white/10 rounded-full blur-3xl"></div>
+</section>
+<div className="p-margin-desktop space-y-gutter max-w-container-max mx-auto">
+
+{banner && (
+<div className={`p-4 rounded-xl text-body-sm font-medium border ${banner.type === 'success' ? 'bg-primary-subtle text-primary border-primary/20' : 'bg-error-container/30 text-error border-error/20'}`}>
+{banner.text}
+</div>
+)}
+
+<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-gutter">
+
+<div className="bg-surface border border-border p-6 rounded-xl flex items-center gap-4 hover:shadow-md transition-shadow">
+<div className="w-12 h-12 bg-primary/10 text-primary flex items-center justify-center rounded-lg">
+<span className="material-symbols-outlined text-3xl">group</span>
+</div>
+<div>
+<p className="text-label-caps text-on-surface-variant uppercase">My Students</p>
+<p className="text-headline-md font-bold">{loading ? '…' : placements.length}</p>
+</div>
+</div>
+
+<div className="bg-surface border border-[#F59E0B]/30 p-6 rounded-xl flex items-center gap-4 hover:shadow-md transition-shadow">
+<div className="w-12 h-12 bg-[#F59E0B]/10 text-[#F59E0B] flex items-center justify-center rounded-lg">
+<span className="material-symbols-outlined text-3xl">rate_review</span>
+</div>
+<div>
+<div className="flex items-center gap-2">
+<p className="text-label-caps text-on-surface-variant uppercase">Logbooks to Review</p>
+{pendingEntries.length > 0 && <span className="flex h-2 w-2 rounded-full bg-[#F59E0B] animate-pulse"></span>}
+</div>
+<p className="text-headline-md font-bold text-[#F59E0B]">{loading ? '…' : pendingEntries.length}</p>
+</div>
+</div>
+
+<div className="bg-surface border border-border p-6 rounded-xl flex flex-col gap-3 hover:shadow-md transition-shadow">
+<div className="flex items-center justify-between">
+<div className="flex items-center gap-3">
+<div className="w-10 h-10 bg-secondary/10 text-secondary flex items-center justify-center rounded-lg">
+<span className="material-symbols-outlined">location_on</span>
+</div>
+<p className="text-label-caps text-on-surface-variant uppercase">Field Visits</p>
+</div>
+<p className="font-bold text-on-surface">{completedVisits}/{visits.length}</p>
+</div>
+<div className="w-full bg-surface-container rounded-full h-2">
+<div className="bg-secondary h-2 rounded-full" style={{ width: `${visitPct}%` }}></div>
+</div>
+</div>
+
+<div className="bg-surface border border-error/30 p-6 rounded-xl flex items-center gap-4 hover:shadow-md transition-shadow">
+<div className="w-12 h-12 bg-error/10 text-error flex items-center justify-center rounded-lg">
+<span className="material-symbols-outlined text-3xl">grading</span>
+</div>
+<div>
+<p className="text-label-caps text-on-surface-variant uppercase">Grades Pending</p>
+<div className="flex items-center gap-2">
+<p className="text-headline-md font-bold text-error">{loading ? '…' : gradesPending}</p>
+{gradesPending > 0 && <span className="bg-error text-white text-[10px] font-bold px-2 py-0.5 rounded-full">ACTION REQUIRED</span>}
+</div>
+</div>
+</div>
+</div>
+
+<div className="grid grid-cols-1 lg:grid-cols-3 gap-gutter">
+
+<div className="lg:col-span-2 space-y-gutter">
+
+<div className="bg-surface border border-border rounded-xl shadow-sm overflow-hidden" ref={studentsTableRef}>
+<div className="px-6 py-4 border-b border-border flex items-center justify-between">
+<h2 className="font-headline-sm text-headline-sm text-on-surface">Supervised Students</h2>
+<button className="text-primary font-bold text-body-sm hover:underline" onClick={() => setShowAllStudents((v) => !v)} type="button">{showAllStudents ? 'Show Less' : 'View All'}</button>
+</div>
+<div className="overflow-x-auto">
+<table className="w-full text-left border-collapse">
+<thead className="bg-background">
+<tr>
+<th className="px-6 py-3 text-label-caps text-on-surface-variant font-label-caps">Student</th>
+<th className="px-6 py-3 text-label-caps text-on-surface-variant font-label-caps">Company</th>
+<th className="px-6 py-3 text-label-caps text-on-surface-variant font-label-caps">Progress</th>
+<th className="px-6 py-3 text-label-caps text-on-surface-variant font-label-caps">Visit Status</th>
+<th className="px-6 py-3 text-label-caps text-on-surface-variant font-label-caps">Score</th>
+<th className="px-6 py-3 text-label-caps text-on-surface-variant font-label-caps">Action</th>
+</tr>
+</thead>
+<tbody className="divide-y divide-border">
+{loading && (
+<tr>
+<td className="px-6 py-4 text-body-sm text-on-surface-variant" colSpan="6">Loading students…</td>
+</tr>
+)}
+{!loading && placements.length === 0 && (
+<tr>
+<td className="px-6 py-4 text-body-sm text-on-surface-variant" colSpan="6">No students assigned to you yet.</td>
+</tr>
+)}
+{!loading && placements.length > 0 && filteredPlacements.length === 0 && (
+<tr>
+<td className="px-6 py-4 text-body-sm text-on-surface-variant" colSpan="6">No students match your search.</td>
+</tr>
+)}
+{!loading && visiblePlacements.map((p) => {
+    const week = latestWeek(p);
+    const pct = Math.min(100, Math.round((week / TOTAL_WEEKS) * 100));
+    const visit = visitForPlacement(p.id);
+    const visitDone = visit?.status === 'completed';
+    return (
+<tr key={p.id} className="hover:bg-background transition-colors group">
+<td className="px-6 py-4">
+<div className="flex items-center gap-3">
+<div className="w-8 h-8 rounded-full bg-primary-subtle text-primary flex items-center justify-center font-bold text-xs">{initials(studentName(p))}</div>
+<div>
+<p className="text-body-sm font-bold">{studentName(p)}</p>
+<p className="text-[11px] text-on-surface-variant">Reg: {p.student?.reg_number || '—'}</p>
+</div>
+</div>
+</td>
+<td className="px-6 py-4 text-body-sm text-on-surface-variant font-medium">{p.company?.name || '—'}</td>
+<td className="px-6 py-4">
+<div className="flex items-center gap-2">
+<div className="w-16 bg-surface-container rounded-full h-1.5">
+<div className="bg-primary h-1.5 rounded-full" style={{ width: `${pct}%` }}></div>
+</div>
+<span className="text-[11px] font-bold text-on-surface-variant">Wk {week}</span>
+</div>
+</td>
+<td className="px-6 py-4">
+{visitDone ? (
+<div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-[#ECFDF5] text-[#0A6E4F] text-[10px] font-bold">
+<span className="w-1.5 h-1.5 rounded-full bg-[#0A6E4F]"></span>
+                                                COMPLETED
+                                            </div>
+) : (
+<div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-secondary-fixed/30 text-secondary text-[10px] font-bold">
+<span className="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+                                                {visit ? 'SCHEDULED' : 'PENDING'}
+                                            </div>
+)}
+</td>
+<td className="px-6 py-4 font-label-code text-label-code font-bold">{p.academic_grade != null ? `${p.academic_grade}/100` : '--'}</td>
+<td className="px-6 py-4">
+<div className="flex gap-2">
+<button className="p-1.5 text-on-surface-variant hover:text-primary transition-colors" title="Grade Student" onClick={() => handleGrade(p)} type="button">
+<span className="material-symbols-outlined text-lg">edit_note</span>
+</button>
+<button className="p-1.5 text-on-surface-variant hover:text-primary transition-colors" title="Send Comment" onClick={() => navigate('/messages')} type="button">
+<span className="material-symbols-outlined text-lg">chat_bubble</span>
+</button>
+</div>
+</td>
+</tr>
+    );
+})}
+</tbody>
+</table>
+</div>
+</div>
+
+<div className="space-y-4">
+<div className="flex items-center justify-between">
+<h2 className="font-headline-sm text-headline-sm text-on-surface">Logbook Review Queue</h2>
+<span className="text-label-caps text-on-surface-variant">Sorted by Oldest First</span>
+</div>
+<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+{!loading && pendingEntries.length === 0 && (
+<div className="bg-surface border border-border p-5 rounded-xl md:col-span-2">
+<p className="text-body-sm text-on-surface-variant">No logbook entries awaiting review. Great job staying up to date.</p>
+</div>
+)}
+{pendingEntries.slice(0, 4).map((entry) => (
+<div key={entry.id} className="bg-surface border border-border p-5 rounded-xl flex flex-col justify-between hover:border-primary/50 transition-all">
+<div className="flex justify-between items-start mb-4">
+<div>
+<h3 className="text-body-md font-bold text-on-surface">Week {entry.week_number}: {(entry.activities || 'Logbook Entry').slice(0, 40)}{(entry.activities || '').length > 40 ? '…' : ''}</h3>
+<p className="text-body-sm text-on-surface-variant">Student: {entry._student}</p>
+</div>
+<span className="text-label-code text-[10px] bg-background px-2 py-1 rounded font-bold">{queueAge(entry.created_at || entry.entry_date)}</span>
+</div>
+<div className="flex items-center justify-between mt-auto pt-4 border-t border-border">
+<p className="text-[11px] font-medium text-on-surface-variant">Status: <span className={entry.status === 'submitted' ? 'text-error' : 'text-primary'}>{entry.status === 'submitted' ? 'Awaiting Feedback' : 'New Submission'}</span></p>
+<button className="bg-[#0A6E4F] hover:bg-primary-hover text-white text-[11px] font-bold px-4 py-2 rounded-lg flex items-center gap-1 transition-colors" onClick={() => handleReview(entry.id)} disabled={reviewing === entry.id} type="button">
+                                        {reviewing === entry.id ? 'Reviewing…' : 'Review'} <span className="material-symbols-outlined text-sm">chevron_right</span>
+</button>
+</div>
+</div>
+))}
+</div>
+</div>
+</div>
+
+<div className="space-y-gutter">
+
+<div className="bg-surface border border-border rounded-xl shadow-sm overflow-hidden">
+<div className="px-6 py-4 border-b border-border bg-background/50">
+<h2 className="font-headline-sm text-headline-sm text-on-surface">Upcoming Visits</h2>
+</div>
+
+{visitToday && (
+<div className="bg-[#F59E0B]/10 border-y border-[#F59E0B]/20 px-6 py-3 flex items-center gap-3">
+<span className="material-symbols-outlined text-[#F59E0B]" style={{ fontVariationSettings: "'FILL' 1" }}>warning</span>
+<p className="text-body-sm font-bold text-[#B45309]">Visit today at {visitToday.placement?.company?.name || 'company'} ({visitToday.placement?.student?.user?.name || 'student'})</p>
+</div>
+)}
+<div className="p-6 space-y-4">
+{!loading && upcomingVisits.length === 0 && (
+<p className="text-body-sm text-on-surface-variant">No field visits scheduled yet.</p>
+)}
+{upcomingVisits.map((v, i) => {
+    const d = new Date(v.visit_date);
+    const done = v.status === 'completed';
+    return (
+<div key={v.id} className="flex gap-4">
+<div className="flex flex-col items-center">
+<div className={done ? 'w-10 h-10 bg-surface-container text-on-surface-variant rounded-lg flex flex-col items-center justify-center' : 'w-10 h-10 bg-primary/10 text-primary rounded-lg flex flex-col items-center justify-center'}>
+<span className="text-[10px] font-bold uppercase leading-none">{d.toLocaleDateString('en-KE', { month: 'short' })}</span>
+<span className="text-lg font-bold leading-none">{String(d.getDate()).padStart(2, '0')}</span>
+</div>
+{i < upcomingVisits.length - 1 && <div className="w-px h-8 bg-border my-1"></div>}
+</div>
+<div className={done ? 'flex-1 opacity-60' : 'flex-1'}>
+<h4 className="text-body-sm font-bold">{v.placement?.company?.name || 'Company'}</h4>
+<p className="text-[11px] text-on-surface-variant">Student: {v.placement?.student?.user?.name || '—'}</p>
+<p className={done ? 'text-[11px] font-medium text-on-surface-variant mt-1' : 'text-[11px] font-medium text-primary mt-1'}>{done ? 'Completed' : `${v.visit_time || 'TBD'} — ${v.status ? v.status.charAt(0).toUpperCase() + v.status.slice(1) : 'Scheduled'}`}</p>
+</div>
+</div>
+    );
+})}
+<Link className="block w-full text-center py-2 text-primary font-bold text-body-sm hover:bg-primary-subtle rounded-lg transition-colors" to="/supervisor/visits">
+                                View Full Schedule
+                            </Link>
+</div>
+</div>
+
+<div className="bg-surface border border-border rounded-xl shadow-sm overflow-hidden">
+<div className="px-6 py-4 border-b border-border flex items-center justify-between">
+<h2 className="font-headline-sm text-headline-sm text-on-surface">Messages</h2>
+{totalUnread > 0 && <span className="bg-error text-white text-[10px] font-bold px-1.5 py-0.5 rounded">{totalUnread} NEW</span>}
+</div>
+<div className="divide-y divide-border">
+{!loading && conversations.length === 0 && (
+<div className="p-4">
+<p className="text-body-sm text-on-surface-variant">No conversations yet.</p>
+</div>
+)}
+{conversations.slice(0, 3).map((c) => (
+<Link key={c.partner_id} className="block p-4 hover:bg-background transition-colors" to="/messages">
+<div className="flex gap-3">
+<div className="w-10 h-10 rounded-full bg-secondary-container/20 text-secondary flex items-center justify-center font-bold text-xs">{initials(c.partner_name)}</div>
+<div className="flex-1 min-w-0">
+<div className="flex justify-between items-start">
+<p className="text-body-sm font-bold truncate">{c.partner_name}</p>
+<span className="text-[10px] text-on-surface-variant">{relativeTime(c.last_time)}</span>
+</div>
+<p className="text-[11px] text-on-surface-variant line-clamp-1">{c.last_message}</p>
+</div>
+</div>
+</Link>
+))}
+</div>
+<div className="p-4 bg-background/30 text-center">
+<Link className="text-primary font-bold text-body-sm hover:underline" to="/messages">Go to Inbox</Link>
+</div>
+</div>
+
+<div className="relative bg-[#064D37] rounded-xl p-6 overflow-hidden text-white group">
+<div className="relative z-10">
+<h3 className="font-headline-sm text-headline-sm mb-2">Portfolio Quality</h3>
+<p className="text-body-sm opacity-80 mb-4">{placements.length > 0 ? `You are supervising ${placements.length} student${placements.length > 1 ? 's' : ''} with ${pendingEntries.length} logbook entr${pendingEntries.length === 1 ? 'y' : 'ies'} awaiting your review.` : 'Your supervision portfolio insights will appear here once students are assigned.'}</p>
+<button className="flex items-center gap-2 text-accent-hover font-bold text-body-sm" onClick={() => studentsTableRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })} type="button">
+<span>Analyze Trends</span>
+<span className="material-symbols-outlined group-hover:translate-x-1 transition-transform">trending_up</span>
+</button>
+</div>
+<div className="absolute -right-8 -bottom-8 opacity-20 transform rotate-12 group-hover:scale-110 transition-transform duration-500">
+<span className="material-symbols-outlined text-[120px]">school</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+
+<button className="fixed right-8 bottom-8 w-14 h-14 bg-primary text-white rounded-full shadow-2xl flex items-center justify-center hover:bg-primary-hover hover:scale-110 active:scale-95 transition-all z-50" onClick={() => navigate('/supervisor/visits')} title="Schedule Field Visit" type="button">
+<span className="material-symbols-outlined text-3xl">add</span>
+</button>
+
+
         </div>
-        </div>
-      </div>
-    </div>
-  );
+    );
 }

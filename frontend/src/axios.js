@@ -6,7 +6,8 @@ const api = axios.create({
     'Content-Type': 'application/json',
     'Accept': 'application/json'
   },
-  withCredentials: true // Required for Sanctum cookie-based authentication
+  withCredentials: true, // Required for Sanctum cookie-based authentication
+  withXSRFToken: true // axios >= 1.6.2: required to send X-XSRF-TOKEN on cross-origin requests
 });
 
 export default api;

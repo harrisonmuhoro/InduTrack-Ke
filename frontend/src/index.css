@@ -1,35 +1,191 @@
 @import "tailwindcss";
 
-:root {
-  --color-primary: #0A6E4F;
-  --color-primary-light: #12A37A;
-  --color-primary-dark: #064D37;
-  
-  --color-accent: #F59E0B;
-  --color-accent-light: #FCD34D;
-  --color-accent-dark: #B45309;
-  
-  --color-bg: #F8FAFC;
+@theme {
+  --color-secondary-fixed-dim: #ffb95f;
+  --color-accent-hover: #FCD34D;
+  --color-on-tertiary: #ffffff;
+  --color-on-background: #0b1c30;
+  --color-inverse-surface: #213145;
+  --color-text-main: #0F172A;
+  --color-primary-subtle: #ECFDF5;
+  --color-surface-dim: #cbdbf5;
+  --color-primary-fixed-dim: #83d7b1;
+  --color-tertiary-fixed-dim: #95d4b6;
+  --color-on-secondary: #ffffff;
+  --color-on-tertiary-container: #a9e9cb;
+  --color-surface-tint: #046c4d;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-variant: #d3e4fe;
+  --color-on-error-container: #93000a;
   --color-surface: #FFFFFF;
+  --color-on-primary-container: #98edc6;
+  --color-on-primary: #ffffff;
+  --color-tertiary-fixed: #b0f0d2;
+  --color-background: #F8FAFC;
+  --color-secondary-fixed: #ffddb8;
+  --color-error-container: #ffdad6;
+  --color-error: #ba1a1a;
+  --color-on-error: #ffffff;
+  --color-surface-container-low: #eff4ff;
+  --color-on-surface: #0b1c30;
+  --color-primary-container: #0a6e4f;
+  --color-inverse-primary: #83d7b1;
+  --color-tertiary-container: #2e6b53;
+  --color-on-secondary-container: #684000;
+  --color-surface-container: #e5eeff;
+  --color-outline: #6f7a73;
+  --color-accent-dark: #B45309;
+  --color-primary-hover: #12A37A;
+  --color-primary: #00543b;
+  --color-on-tertiary-fixed: #002115;
+  --color-inverse-on-surface: #eaf1ff;
+  --color-surface-container-high: #dce9ff;
+  --color-secondary-container: #fea619;
+  --color-on-primary-fixed-variant: #005139;
+  --color-on-secondary-fixed: #2a1700;
+  --color-on-tertiary-fixed-variant: #0d513a;
   --color-border: #E2E8F0;
-  
-  --color-text-primary: #0F172A;
-  --color-text-secondary: #64748B;
-  --color-text-muted: #CBD5E1;
-  
-  --color-success: #10B981;
-  --color-warning: #F97316;
-  --color-error: #EF4444;
-  --color-info: #0EA5E9;
-  
-  --font-sans: 'Inter', 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
-  --font-mono: 'JetBrains Mono', monospace;
+  --color-tertiary: #10533c;
+  --color-surface-container-highest: #d3e4fe;
+  --color-on-surface-variant: #3f4943;
+  --color-secondary: #855300;
+  --color-primary-fixed: #9ef4cc;
+  --color-on-primary-fixed: #002115;
+  --color-surface-bright: #f8f9ff;
+  --color-on-secondary-fixed-variant: #653e00;
+  --color-outline-variant: #bec9c1;
+  --radius: 0.25rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+  --radius-full: 9999px;
+  --spacing-gutter: 24px;
+  --spacing-margin-desktop: 32px;
+  --spacing-sidebar-width: 256px;
+  --spacing-container-max: 1280px;
+  --spacing-margin-mobile: 16px;
+  --spacing-unit: 4px;
+  --font-headline-md: "Plus Jakarta Sans";
+  --font-headline-sm: "Plus Jakarta Sans";
+  --font-label-code: "JetBrains Mono";
+  --font-body-sm: "Plus Jakarta Sans";
+  --font-label-caps: "Plus Jakarta Sans";
+  --font-display-lg: "Plus Jakarta Sans";
+  --font-display-lg-mobile: "Plus Jakarta Sans";
+  --font-body-md: "Plus Jakarta Sans";
+  --font-body-lg: "Plus Jakarta Sans";
+  --text-headline-md: 24px;
+  --text-headline-md--line-height: 32px;
+  --text-headline-md--font-weight: 600;
+  --text-headline-sm: 20px;
+  --text-headline-sm--line-height: 28px;
+  --text-headline-sm--font-weight: 600;
+  --text-label-code: 13px;
+  --text-label-code--line-height: 16px;
+  --text-label-code--font-weight: 500;
+  --text-body-sm: 14px;
+  --text-body-sm--line-height: 20px;
+  --text-body-sm--font-weight: 400;
+  --text-label-caps: 12px;
+  --text-label-caps--line-height: 16px;
+  --text-label-caps--font-weight: 700;
+  --text-label-caps--letter-spacing: 0.05em;
+  --text-display-lg: 40px;
+  --text-display-lg--line-height: 48px;
+  --text-display-lg--font-weight: 700;
+  --text-display-lg--letter-spacing: -0.02em;
+  --text-display-lg-mobile: 32px;
+  --text-display-lg-mobile--line-height: 40px;
+  --text-display-lg-mobile--font-weight: 700;
+  --text-display-lg-mobile--letter-spacing: -0.02em;
+  --text-body-md: 16px;
+  --text-body-md--line-height: 24px;
+  --text-body-md--font-weight: 400;
+  --text-body-lg: 18px;
+  --text-body-lg--line-height: 28px;
+  --text-body-lg--font-weight: 400;
 }
 
 body {
-  background-color: var(--color-bg);
-  color: var(--color-text-primary);
-  font-family: var(--font-sans);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+    background-color: #F8FAFC;
+    color: #0F172A;
+    font-family: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
 }
+/* Alias used across pages as var(--color-bg); maps to design background token */
+:root {
+    --color-bg: #F8FAFC;
+    --color-primary-dark: #064D37;
+    --color-text-primary: #0F172A;
+    --color-text-secondary: #64748B;
+    --color-accent: #F59E0B;
+    --color-success: #0A6E4F;
+    --color-primary-light: #ECFDF5;
+}
+.material-symbols-outlined {
+    font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+.sidebar-active-indicator {
+    position: absolute;
+    left: 0;
+    width: 4px;
+    height: 100%;
+    background-color: #F59E0B;
+}
+.glass-card {
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(8px);
+    border: 1px solid #E2E8F0;
+}
+.status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 6px;
+}
+.pulse-amber {
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7);
+    animation: pulse 2s infinite;
+}
+@keyframes pulse {
+    0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7); }
+    70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(245, 158, 11, 0); }
+    100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
+}
+.progress-ring-circle {
+    transition: stroke-dashoffset 0.35s;
+    transform: rotate(-90deg);
+    transform-origin: 50% 50%;
+}
+/* ── Classes ported from Stitch mockup inline styles ── */
+.bento-card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.bento-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+}
+.academic-gradient {
+    background: linear-gradient(135deg, #6B21A8 0%, #7C3AED 100%);
+}
+.pulsing-red {
+    animation: pulse-red 2s infinite;
+}
+@keyframes pulse-red {
+    0% { box-shadow: 0 0 0 0 rgba(186, 26, 26, 0.4); }
+    70% { box-shadow: 0 0 0 10px rgba(186, 26, 26, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(186, 26, 26, 0); }
+}
+.pulsing-dot {
+    animation: pulse-dot 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+@keyframes pulse-dot {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: .5; transform: scale(1.5); }
+}
+.compliance-bar {
+    transition: width 1s ease-in-out;
+}
+.custom-scrollbar::-webkit-scrollbar { width: 4px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: #E2E8F0; border-radius: 10px; }
