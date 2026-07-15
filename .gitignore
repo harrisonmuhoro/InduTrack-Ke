@@ -9,3 +9,18 @@ composer.phar
 # Start scripts
 start-backend.bat
 backend/.env
+
+# IDE
+.vscode/
+.idea/
+
+# Claude config
+.claude/
+
+# Design reference files
+stitch_indutrack_ke_dashboard_ui/
+
+# Frontend/Backend build artifacts
+frontend/dist/
+frontend/build/
+backend/bootstrap/cache/*.php
