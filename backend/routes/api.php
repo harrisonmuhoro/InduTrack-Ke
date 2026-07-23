@@ -16,7 +16,7 @@ use App\Http\Controllers\MessageController;
 use App\Http\Controllers\ProfileController;
 
 // ─── Public Auth Routes ──────────────────────────────────────────────────────
-Route::middleware('throttle:10,1')->group(function () {
+Route::middleware('throttle:60,1')->group(function () {
     Route::post('/auth/register', [AuthController::class, 'register']);
     Route::post('/auth/login',    [AuthController::class, 'login']);
 });

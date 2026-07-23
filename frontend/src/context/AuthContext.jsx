@@ -9,9 +9,8 @@ export function AuthProvider({ children }) {
   const [contextStr, setContextStr] = useState('');
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    // Attempt to fetch profile on initial load
-    api.get('/profile')
+  const fetchUser = () => {
+    return api.get('/profile')
       .then(res => {
         setUser(res.data.user || res.data); // depending on how profile returns
         setRole(res.data.role);
@@ -25,6 +24,10 @@ export function AuthProvider({ children }) {
       .finally(() => {
         setLoading(false);
       });
+  };
+
+  useEffect(() => {
+    fetchUser();
   }, []);
 
   const login = (data) => {
@@ -45,7 +48,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, role, context: contextStr, loading, login, logout, setRole }}>
+    <AuthContext.Provider value={{ user, role, context: contextStr, loading, login, logout, setRole, fetchUser }}>
       {children}
     </AuthContext.Provider>
   );

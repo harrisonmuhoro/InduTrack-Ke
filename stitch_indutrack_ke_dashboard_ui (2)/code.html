@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Login | InduTrack KE - Institutional Portal</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@500&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@100..900&amp;family=Plus+Jakarta+Sans:wght@100..900&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-primary-fixed-variant": "#005139",
+                        "surface-dim": "#cbdbf5",
+                        "primary": "#00543b",
+                        "on-secondary-container": "#684000",
+                        "tertiary-fixed-dim": "#95d4b6",
+                        "primary-container": "#0a6e4f",
+                        "on-tertiary": "#ffffff",
+                        "secondary": "#855300",
+                        "text-main": "#0F172A",
+                        "border": "#E2E8F0",
+                        "tertiary": "#10533c",
+                        "on-surface-variant": "#3f4943",
+                        "surface-container": "#e5eeff",
+                        "background": "#F8FAFC",
+                        "on-secondary-fixed": "#2a1700",
+                        "surface-container-low": "#eff4ff",
+                        "tertiary-fixed": "#b0f0d2",
+                        "tertiary-container": "#2e6b53",
+                        "surface-bright": "#f8f9ff",
+                        "secondary-fixed-dim": "#ffb95f",
+                        "secondary-fixed": "#ffddb8",
+                        "surface-tint": "#046c4d",
+                        "surface-container-high": "#dce9ff",
+                        "on-tertiary-fixed-variant": "#0d513a",
+                        "primary-fixed": "#9ef4cc",
+                        "surface-container-lowest": "#ffffff",
+                        "primary-fixed-dim": "#83d7b1",
+                        "inverse-surface": "#213145",
+                        "secondary-container": "#fea619",
+                        "error": "#ba1a1a",
+                        "surface-container-highest": "#d3e4fe",
+                        "on-background": "#0b1c30",
+                        "outline": "#6f7a73",
+                        "outline-variant": "#bec9c1",
+                        "accent-dark": "#B45309",
+                        "on-surface": "#0b1c30",
+                        "accent-hover": "#FCD34D",
+                        "primary-subtle": "#ECFDF5",
+                        "on-secondary": "#ffffff",
+                        "surface": "#FFFFFF",
+                        "on-primary-container": "#98edc6",
+                        "primary-hover": "#12A37A",
+                        "on-error": "#ffffff",
+                        "on-secondary-fixed-variant": "#653e00",
+                        "on-error-container": "#93000a",
+                        "surface-variant": "#d3e4fe",
+                        "on-primary-fixed": "#002115",
+                        "on-primary": "#ffffff",
+                        "inverse-on-surface": "#eaf1ff",
+                        "error-container": "#ffdad6",
+                        "on-tertiary-container": "#a9e9cb",
+                        "inverse-primary": "#83d7b1",
+                        "on-tertiary-fixed": "#002115"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "8px",
+                        "xl": "12px",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "gutter": "24px",
+                        "margin-desktop": "32px",
+                        "container-max": "1280px",
+                        "unit": "4px",
+                        "margin-mobile": "16px",
+                        "sidebar-width": "256px"
+                    },
+                    "fontFamily": {
+                        "label-caps": ["Plus Jakarta Sans"],
+                        "headline-md": ["Plus Jakarta Sans"],
+                        "display-lg-mobile": ["Plus Jakarta Sans"],
+                        "body-md": ["Plus Jakarta Sans"],
+                        "display-lg": ["Plus Jakarta Sans"],
+                        "label-code": ["JetBrains Mono"],
+                        "body-lg": ["Plus Jakarta Sans"],
+                        "headline-sm": ["Plus Jakarta Sans"],
+                        "body-sm": ["Plus Jakarta Sans"]
+                    },
+                    "fontSize": {
+                        "label-caps": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "700"}],
+                        "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                        "display-lg-mobile": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                        "display-lg": ["40px", {"lineHeight": "48px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "label-code": ["13px", {"lineHeight": "16px", "fontWeight": "500"}],
+                        "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}],
+                        "headline-sm": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                        "body-sm": ["14px", {"lineHeight": "20px", "fontWeight": "400"}]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .bg-pattern {
+            background-image: radial-gradient(rgba(255, 255, 255, 0.1) 1px, transparent 1px);
+            background-size: 24px 24px;
+        }
+        .login-card-shadow {
+            box-shadow: 0 1px 3px rgba(0,0,0,0.07), 0 10px 15px -3px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body class="bg-background font-body-md text-on-background selection:bg-primary-subtle selection:text-primary min-h-screen flex">
+<!-- Split Screen Container -->
+<main class="w-full min-h-screen flex flex-col md:flex-row overflow-hidden">
+<!-- Left Side: Branding & Atmospheric Visuals -->
+<section class="relative md:w-[60%] bg-[#064D37] flex flex-col justify-between p-8 md:p-16 overflow-hidden">
+<!-- Background Decoration -->
+<div class="absolute inset-0 bg-pattern opacity-30 pointer-events-none"></div>
+<div class="absolute top-0 right-0 w-96 h-96 bg-primary-container/20 blur-[120px] rounded-full -mr-48 -mt-48"></div>
+<!-- Brand Logo -->
+<div class="relative z-10 flex items-center gap-2">
+<span class="font-headline-md text-headline-md text-white font-extrabold tracking-tight">InduTrack <span class="text-[#F59E0B]">KE</span></span>
+</div>
+<!-- Central Visual Content -->
+<div class="relative z-10 space-y-12">
+<div class="max-w-md">
+<h1 class="font-display-lg text-display-lg text-white mb-6 leading-tight">
+                        Bridging the gap between education and industry.
+                    </h1>
+<p class="font-body-lg text-body-lg text-white/80">
+                        The ultimate platform for streamlining internships, industrial attachments, and workforce development across Kenya.
+                    </p>
+</div>
+<!-- High Quality Atmospheric Image -->
+<div class="relative rounded-xl overflow-hidden aspect-[4/3] login-card-shadow group">
+<div class="absolute inset-0 bg-gradient-to-t from-[#064D37]/80 via-transparent to-transparent z-10"></div>
+<img class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" data-alt="A cinematic, high-quality photograph showing a modern Kenyan industrial lab where an experienced engineer and a university student are collaborating over a digital blueprint. The lighting is warm and professional, emphasizing a sense of mentorship and technological progress. The aesthetic is crisp and institutional, with professional equipment in the background and a focus on the shared interaction between the two professionals." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBJq5CajgOEbfC1ZmcpNEZ1otnQ9eiSrkX4_gKJFZVIyzObFoSVuWYcw5pFe-TviUlIRyI5oOKSG9ONnYhvsCR8flgN5G6MO2_PRVWJF0dZJbwUU8Bvkk2MKCUsDSU_uKXSt0NeeiXkP2z28UC6_WeJmcX6o4SUC3F8SwWjWZsOJEvNx0_6Q371JCUEc57BklJ-KzHUz5fGo-Ui7kvUHA-c5Cd8QA6Q3gY_-d7cyKVrtu_QuAcq79k9TRpmemR4ezwfd8umDqjAIXOa"/>
+<div class="absolute bottom-6 left-6 z-20 flex items-center gap-3">
+<div class="p-2 bg-white/10 backdrop-blur-md rounded-lg">
+<span class="material-symbols-outlined text-white">handshake</span>
+</div>
+<div>
+<p class="text-white font-bold text-sm">Industry-First Integration</p>
+<p class="text-white/60 text-xs">Standardized by TVET &amp; University Bodies</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Footer Branding -->
+<div class="relative z-10 pt-8 flex items-center justify-between border-t border-white/10">
+<p class="font-label-caps text-label-caps text-white/50 uppercase tracking-widest">The Institutional Portal</p>
+<div class="flex gap-4">
+<span class="material-symbols-outlined text-white/30 text-[20px]">verified</span>
+<span class="material-symbols-outlined text-white/30 text-[20px]">shield</span>
+</div>
+</div>
+</section>
+<!-- Right Side: Login Form -->
+<section class="md:w-[40%] bg-surface flex items-center justify-center p-6 md:p-12">
+<div class="w-full max-w-[440px] space-y-10">
+<!-- Form Header -->
+<div class="space-y-3">
+<h2 class="font-headline-md text-headline-md text-text-main">Sign In</h2>
+<p class="font-body-md text-body-md text-on-surface-variant">Welcome back! Please enter your details.</p>
+</div>
+<!-- Social Login -->
+<button class="w-full flex items-center justify-center gap-3 py-3 px-4 border border-border rounded-lg font-label-caps text-label-caps text-text-main hover:bg-surface-container-low transition-colors group">
+<img alt="Google" class="w-5 h-5" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDpUeGFKZiga6djncIk8RqgSlpxiM4pJg8BXOhdSSpOQBSjhWyicwuhr_ljujHRT2DV2588MgzSIHkbCKmM7qUWm7dE_cNoTycvx6yCOi1EG53tH5D0m9s27hSIcko_cWn9zMhLHdZrUELCgrFPWOAeHUkNHP5fP0QvTNpuEHTsIhFRnTRPOm3_o_xSaBH1qx6C4yclk5mZH7bcLeLE4Kx_IXlNzU3AlSnbI6ynzIFfGVq98TI8EIvz8yArmgax5LtppG9gBrQZVDfL"/>
+                    Sign in with Google
+                </button>
+<div class="relative flex items-center">
+<div class="flex-grow border-t border-border"></div>
+<span class="flex-shrink mx-4 font-label-caps text-label-caps text-outline-variant uppercase">Or with email</span>
+<div class="flex-grow border-t border-border"></div>
+</div>
+<!-- Form -->
+<form class="space-y-6" onsubmit="event.preventDefault();">
+<div class="space-y-2">
+<label class="block font-label-caps text-label-caps text-on-surface-variant" for="email">Email Address</label>
+<div class="relative group">
+<span class="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-outline group-focus-within:text-primary transition-colors">mail</span>
+<input class="w-full pl-10 pr-4 py-3 bg-white border border-border rounded-lg text-body-md focus:ring-2 focus:ring-primary-subtle focus:border-primary-container outline-none transition-all placeholder:text-outline-variant" id="email" placeholder="name@institution.ac.ke" type="email"/>
+</div>
+</div>
+<div class="space-y-2">
+<label class="block font-label-caps text-label-caps text-on-surface-variant" for="password">Password</label>
+<div class="relative group">
+<span class="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-outline group-focus-within:text-primary transition-colors">lock</span>
+<input class="w-full pl-10 pr-10 py-3 bg-white border border-border rounded-lg text-body-md focus:ring-2 focus:ring-primary-subtle focus:border-primary-container outline-none transition-all placeholder:text-outline-variant" id="password" placeholder="••••••••" type="password"/>
+<button class="absolute right-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-outline hover:text-text-main transition-colors" type="button">visibility</button>
+</div>
+</div>
+<div class="flex items-center justify-between">
+<label class="flex items-center gap-2 cursor-pointer group">
+<div class="relative flex items-center justify-center w-5 h-5">
+<input class="peer appearance-none w-5 h-5 border border-border rounded focus:ring-2 focus:ring-primary-subtle checked:bg-primary-container checked:border-primary-container transition-all" type="checkbox"/>
+<span class="material-symbols-outlined text-white text-[16px] absolute scale-0 peer-checked:scale-100 transition-transform">check</span>
+</div>
+<span class="font-body-sm text-body-sm text-on-surface-variant group-hover:text-text-main transition-colors">Remember me</span>
+</label>
+<a class="font-label-caps text-label-caps text-primary-container hover:text-primary-hover transition-colors" href="#">Forgot password?</a>
+</div>
+<!-- CTA -->
+<button class="w-full py-4 bg-[#F59E0B] hover:bg-[#D97706] text-[#064D37] font-bold rounded-lg shadow-sm hover:shadow-md transition-all active:scale-[0.98] flex items-center justify-center gap-2" type="submit">
+<span class="font-label-caps text-label-caps text-[14px]">Sign In</span>
+<span class="material-symbols-outlined text-[20px]">arrow_forward</span>
+</button>
+</form>
+<!-- Form Footer -->
+<div class="pt-6 border-t border-border text-center">
+<p class="font-body-sm text-body-sm text-on-surface-variant">
+                        Don't have an account? 
+                        <a class="font-bold text-[#064D37] hover:underline" href="#">Contact your institution's coordinator.</a>
+</p>
+</div>
+</div>
+</section>
+</main>
+<!-- Simple Tooltip Implementation -->
+<script>
+        // Micro-interactions for form inputs
+        const inputs = document.querySelectorAll('input');
+        inputs.forEach(input => {
+            input.addEventListener('focus', () => {
+                input.parentElement.querySelector('.material-symbols-outlined').style.color = '#0A6E4F';
+            });
+            input.addEventListener('blur', () => {
+                input.parentElement.querySelector('.material-symbols-outlined').style.color = '';
+            });
+        });
+
+        // Simple visibility toggle logic
+        const togglePass = document.querySelector('button.material-symbols-outlined');
+        if (togglePass) {
+            togglePass.addEventListener('click', () => {
+                const passInput = document.getElementById('password');
+                const type = passInput.getAttribute('type') === 'password' ? 'text' : 'password';
+                passInput.setAttribute('type', type);
+                togglePass.textContent = type === 'password' ? 'visibility' : 'visibility_off';
+            });
+        }
+    </script>
+</body></html>

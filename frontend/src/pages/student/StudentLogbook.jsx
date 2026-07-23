@@ -1,9 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import api from '../axios';
-import { useAuth } from '../context/AuthContext';
-import NotificationBell from '../components/NotificationBell';
-import AppsMenu from '../components/AppsMenu';
+import api from '../../axios';
+import { useAuth } from '../../context/AuthContext';
 
 const STUDENT_APP_LINKS = [
     { to: '/student', icon: 'dashboard', label: 'Dashboard' },
@@ -181,84 +179,7 @@ export default function StudentLogbook() {
     const timelineWeeks = Array.from({ length: totalWeeks }, (_, i) => i + 1);
 
     return (
-        <div className="font-body-md text-body-md overflow-x-hidden min-h-screen bg-[var(--color-bg)]">
-
-
-<aside className="fixed left-0 top-0 h-screen w-sidebar-width bg-[#064D37] flex flex-col py-gutter shadow-sm z-50">
-<div className="px-6 mb-10">
-<h1 className="text-headline-md font-headline-md font-bold text-surface tracking-tight">InduTrack KE</h1>
-<p className="text-label-caps font-label-caps text-surface/60 mt-1">Student Portal</p>
-</div>
-<nav className="flex-1 flex flex-col gap-1 px-2">
-<Link className="flex items-center gap-3 text-surface-variant/80 hover:text-surface px-4 py-3 sidebar-item-transition hover:bg-primary-hover/20 rounded-lg" to="/student">
-<span className="material-symbols-outlined">dashboard</span>
-<span className="font-label-caps text-label-caps">Dashboard</span>
-</Link>
-<Link className="flex items-center gap-3 text-surface-variant/80 hover:text-surface px-4 py-3 sidebar-item-transition hover:bg-primary-hover/20 rounded-lg" to="/student/match">
-<span className="material-symbols-outlined">domain</span>
-<span className="font-label-caps text-label-caps">Institutions</span>
-</Link>
-<Link className="flex items-center gap-3 text-surface-variant/80 hover:text-surface px-4 py-3 sidebar-item-transition hover:bg-primary-hover/20 rounded-lg" to="/student/match">
-<span className="material-symbols-outlined">handshake</span>
-<span className="font-label-caps text-label-caps">Industry Partners</span>
-</Link>
-<Link className="flex items-center gap-3 bg-primary-container text-on-primary border-l-4 border-[#F59E0B] px-4 py-3 translate-x-1 transition-transform rounded-r-lg" to="/student/logbook">
-<span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>menu_book</span>
-<span className="font-label-caps text-label-caps">Student Logbooks</span>
-</Link>
-<Link className="flex items-center gap-3 text-surface-variant/80 hover:text-surface px-4 py-3 sidebar-item-transition hover:bg-primary-hover/20 rounded-lg" to="/student/applications">
-<span className="material-symbols-outlined">location_on</span>
-<span className="font-label-caps text-label-caps">Placement Tracker</span>
-</Link>
-<Link className="flex items-center gap-3 text-surface-variant/80 hover:text-surface px-4 py-3 sidebar-item-transition hover:bg-primary-hover/20 rounded-lg" to="/profile">
-<span className="material-symbols-outlined">settings</span>
-<span className="font-label-caps text-label-caps">Settings</span>
-</Link>
-</nav>
-<div className="px-4 mt-auto">
-<button className="w-full py-3 bg-secondary-container text-on-secondary-container font-bold rounded-lg flex items-center justify-center gap-2 hover:bg-accent-hover transition-colors shadow-sm" onClick={() => navigate('/student/applications')} type="button">
-<span className="material-symbols-outlined">add</span>
-                New Placement
-            </button>
-</div>
-<div className="mt-6 border-t border-surface/10 pt-6 px-2">
-<a className="flex items-center gap-3 text-surface-variant/80 hover:text-surface px-4 py-3 sidebar-item-transition hover:bg-primary-hover/20 rounded-lg" href="mailto:support@indutrack.ke">
-<span className="material-symbols-outlined">help</span>
-<span className="font-label-caps text-label-caps">Help Center</span>
-</a>
-<button className="w-full flex items-center gap-3 text-surface-variant/80 hover:text-surface px-4 py-3 sidebar-item-transition hover:bg-primary-hover/20 rounded-lg" onClick={handleLogout} type="button">
-<span className="material-symbols-outlined">logout</span>
-<span className="font-label-caps text-label-caps">Logout</span>
-</button>
-</div>
-</aside>
-
-<main className="ml-sidebar-width min-h-screen flex flex-col">
-
-<header className="sticky top-0 bg-surface border-b border-border h-16 flex items-center justify-between px-margin-desktop z-40">
-<div className="flex items-center gap-4">
-<div className="relative">
-<span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline">search</span>
-<input className="pl-10 pr-4 py-2 bg-surface-container-low border-none rounded-lg w-64 focus:ring-2 focus:ring-primary focus:bg-surface transition-all text-body-sm" onChange={(e) => setSearchQuery(e.target.value)} onKeyDown={handleSearchKeyDown} placeholder="Search entries, partners..." type="text" value={searchQuery}/>
-</div>
-</div>
-<div className="flex items-center gap-6">
-<div className="flex gap-4 items-center">
-<NotificationBell buttonClassName="relative text-on-surface-variant hover:text-primary transition-colors p-2 rounded-full hover:bg-surface-container" />
-<AppsMenu buttonClassName="text-on-surface-variant hover:text-primary transition-colors p-2 rounded-full hover:bg-surface-container" links={STUDENT_APP_LINKS} />
-</div>
-<div className="h-8 w-px bg-border"></div>
-<div className="flex items-center gap-3 cursor-pointer group">
-<div className="text-right">
-<p className="font-bold text-body-sm leading-none">{user?.name || 'Student'}</p>
-<p className="text-[10px] uppercase font-bold text-outline-variant tracking-wider">{user?.email || 'Student'}</p>
-</div>
-<div className="w-10 h-10 rounded-full border-2 border-primary-fixed bg-primary-subtle text-primary flex items-center justify-center font-bold text-body-sm">{initialsOf(user?.name)}</div>
-</div>
-</div>
-</header>
-
-<div className="flex-1 p-margin-desktop max-w-container-max mx-auto w-full">
+        <div className="flex-1 p-margin-desktop max-w-container-max mx-auto w-full animate-in fade-in duration-300">
 
 <nav className="flex items-center gap-2 text-outline-variant font-label-caps text-label-caps mb-4">
 <Link className="hover:text-primary transition-colors" to="/student">My Logbooks</Link>
@@ -468,9 +389,5 @@ export default function StudentLogbook() {
 </div>
 </div>
 </div>
-</main>
-
-
-        </div>
     );
 }

@@ -11,7 +11,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
-#[Fillable(['name', 'email', 'password'])]
+#[Fillable(['name', 'email', 'password', 'profile_photo_path'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable implements MustVerifyEmail
 {
@@ -39,5 +39,14 @@ class User extends Authenticatable implements MustVerifyEmail
     public function hasRole($roleName)
     {
         return $this->roles()->where('name', $roleName)->exists();
+    }
+
+    protected $appends = ['profile_photo_url'];
+
+    public function getProfilePhotoUrlAttribute()
+    {
+        return $this->profile_photo_path 
+            ? url('storage/' . $this->profile_photo_path) 
+            : null;
     }
 }

@@ -5,7 +5,7 @@ import api from '../axios';
 import { useAuth } from '../context/AuthContext';
 
 export default function ProfilePage() {
-  const { role, context, logout } = useAuth();
+  const { role, context, logout, fetchUser } = useAuth();
 
   const navigate = useNavigate();
 
@@ -18,19 +18,19 @@ export default function ProfilePage() {
   const [companyForm, setCompanyForm] = useState({ description: '', website: '', phone: '', physical_address: '' });
   const [studentForm, setStudentForm] = useState({ skills: [], emergency_contact: { name: '', phone: '', relation: '' } });
   const [academicForm, setAcademicForm] = useState({ department: '' });
+
   const [passwordForm, setPasswordForm] = useState({ current_password: '', password: '', password_confirmation: '' });
   const [emailForm, setEmailForm] = useState({ email: '' });
 
-  // Feedback
-  const [feedback, setFeedback] = useState({ message: '', type: '' }); // type: 'success' | 'error'
   const [saving, setSaving] = useState(false);
+  const [feedback, setFeedback] = useState({ message: '', type: '' });
 
-  const showFeedback = (message, type = 'success') => {
-    setFeedback({ message, type });
+  const showFeedback = (msg, type = 'success') => {
+    setFeedback({ message: msg, type });
     setTimeout(() => setFeedback({ message: '', type: '' }), 4000);
   };
 
-  useEffect(() => {
+  const loadProfile = () => {
     api.get('/profile')
       .then(res => {
         const data = res.data;
@@ -52,65 +52,64 @@ export default function ProfilePage() {
       })
       .catch(() => showFeedback('Failed to load profile.', 'error'))
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    loadProfile();
   }, []);
 
   const handlePersonalSave = async (e) => {
-    e.preventDefault(); setSaving(true);
+    e.preventDefault();
+    setSaving(true);
     try {
-      const payload = { name: personalForm.name };
-      // Phone is available for all roles except Super Admin
-      if (role !== 'super_admin') payload.phone = personalForm.phone;
-
-      // Role-specific extra fields
-      if (role === 'student') {
-        payload.skills = studentForm.skills;
-        payload.emergency_contact = studentForm.emergency_contact;
-      } else if (role === 'company' || role === 'company_supervisor') {
-        Object.assign(payload, companyForm);
-      } else if (role === 'institution_supervisor') {
-        payload.department = academicForm.department;
-      }
+      let payload = { ...personalForm };
+      if (role === 'Student') payload.student = studentForm;
+      if (role === 'Company') payload.company = companyForm;
+      if (role === 'Academic Supervisor') payload.academic_supervisor = academicForm;
 
       await api.put('/profile', payload);
       showFeedback('Profile updated successfully!');
+      fetchUser();
+      loadProfile();
     } catch (err) {
       showFeedback(err.response?.data?.message || 'Failed to update profile.', 'error');
     } finally { setSaving(false); }
   };
 
   const handlePasswordSave = async (e) => {
-    e.preventDefault(); setSaving(true);
+    e.preventDefault();
+    setSaving(true);
     try {
       await api.put('/profile/password', passwordForm);
       showFeedback('Password updated successfully!');
       setPasswordForm({ current_password: '', password: '', password_confirmation: '' });
     } catch (err) {
-      const errors = err.response?.data?.errors;
-      const msg = errors ? Object.values(errors).flat().join(' ') : (err.response?.data?.message || 'Failed to update password.');
-      showFeedback(msg, 'error');
+      showFeedback(err.response?.data?.message || 'Failed to update password.', 'error');
     } finally { setSaving(false); }
   };
 
   const handleEmailSave = async (e) => {
-    e.preventDefault(); setSaving(true);
+    e.preventDefault();
+    setSaving(true);
     try {
       await api.put('/profile/email', emailForm);
-      showFeedback('Email updated! Please check your inbox to verify the new address.');
+      showFeedback('Email updated. Please check your inbox for verification link.');
+      fetchUser();
+      loadProfile();
     } catch (err) {
-      const errors = err.response?.data?.errors;
-      const msg = errors ? Object.values(errors).flat().join(' ') : (err.response?.data?.message || 'Failed to update email.');
-      showFeedback(msg, 'error');
+      showFeedback(err.response?.data?.message || 'Failed to update email.', 'error');
     } finally { setSaving(false); }
   };
 
   const handlePhotoUpload = async (e) => {
     const file = e.target.files[0]; if (!file) return;
-    const formData = new FormData();
-    formData.append(role === 'company' ? 'photo' : 'photo', file);
+    const formData = new FormData(); formData.append('photo', file);
     setSaving(true);
     try {
       await api.post('/profile/photo', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
       showFeedback('Photo uploaded successfully!');
+      fetchUser();
+      loadProfile();
     } catch (err) {
       const errors = err.response?.data?.errors;
       const msg = errors ? Object.values(errors).flat().join(' ') : 'Upload failed. Max 2MB, JPG/PNG only.';
@@ -201,8 +200,12 @@ export default function ProfilePage() {
         {/* Profile Photo Card */}
         <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6 mb-6 flex items-center gap-6 shadow-sm">
           <div className="relative group">
-            <div className="h-20 w-20 rounded-full bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-accent)] flex items-center justify-center text-white text-3xl font-bold shadow-lg">
-              {profile?.user?.name?.charAt(0)?.toUpperCase() || '?'}
+            <div className="h-20 w-20 rounded-full bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-accent)] flex items-center justify-center text-white text-3xl font-bold shadow-lg overflow-hidden">
+              {profile?.user?.profile_photo_url ? (
+                <img src={profile.user.profile_photo_url} alt="Profile" className="h-full w-full object-cover" />
+              ) : (
+                profile?.user?.name?.charAt(0)?.toUpperCase() || '?'
+              )}
             </div>
             <label className="absolute inset-0 rounded-full bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition cursor-pointer">
               <Upload size={20} className="text-white" />
