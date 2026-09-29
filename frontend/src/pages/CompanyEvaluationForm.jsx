@@ -1,12 +1,9 @@
 import { useState, useEffect } from 'react';
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { Building, Users, LogOut } from 'lucide-react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../axios';
-import { useAuth } from '../context/AuthContext';
+import AppShell, { PageHeader } from '../components/AppShell';
 
 export default function CompanyEvaluationForm() {
-  const { role, context, logout } = useAuth();
-
   const [placement, setPlacement] = useState(null);
   const [loading, setLoading] = useState(true);
   const [searchParams] = useSearchParams();
@@ -25,9 +22,6 @@ export default function CompanyEvaluationForm() {
 
   useEffect(() => {
     if (!placementId) return setLoading(false);
-    
-    // In a real app we'd fetch the specific placement details to show who we're evaluating
-    // Here we'll just mock it or skip it, but let's assume we fetch supervisor's assigned students
     api.get('/supervisors/students')
       .then(res => {
         const found = res.data.find(p => p.id == placementId);
@@ -43,11 +37,11 @@ export default function CompanyEvaluationForm() {
     try {
       await api.post('/evaluations', {
         placement_id: placementId,
-        evaluator_type: 'company_supervisor', // or get from auth context
+        evaluator_type: 'company_supervisor',
         ...form
       });
       alert('Evaluation submitted successfully');
-      navigate('/company'); // Redirect to dashboard
+      navigate('/company');
     } catch (err) {
       alert(err.response?.data?.message || 'Failed to submit evaluation.');
     } finally {
@@ -55,125 +49,81 @@ export default function CompanyEvaluationForm() {
     }
   };
 
-  const handleLogout = async () => {
-    await logout();
-    navigate('/login');
-  };
-
   if (!placementId) {
     return (
-      <div className="min-h-screen bg-[var(--color-bg)] flex items-center justify-center">
-        <div className="bg-white p-8 rounded-xl shadow-md text-center">
-          <p className="text-red-500 mb-4">No placement specified for evaluation.</p>
-          <Link to="/company" className="text-blue-500 underline">Back to Dashboard</Link>
+      <AppShell portal="company">
+        <div className="sheet p-8 max-w-md">
+          <p className="text-[var(--stamp)] mb-4">No placement specified for evaluation.</p>
+          <Link to="/company" className="btn btn-ghost">Back to slots</Link>
         </div>
-      </div>
+      </AppShell>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[var(--color-bg)] flex">
-      {/* Sidebar */}
-      <div className="w-64 bg-[var(--color-primary-dark)] text-white p-6 flex flex-col flex-shrink-0">
-        <h1 className="text-xl font-bold mb-8">InduTrack KE</h1>
-        <nav className="flex-1 space-y-1">
-          <Link to="/company" className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[var(--color-primary)] text-white text-sm">
-            <Building size={18} /> My Slots / Students
-          </Link>
-          <Link to="/company/applicants" className="flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-[var(--color-primary)] text-white/90 text-sm">
-            <Users size={18} /> Applicants Inbox
-          </Link>
-        </nav>
-        <button onClick={handleLogout} className="flex items-center gap-2 w-full text-left px-4 py-2 rounded-lg text-red-300 hover:bg-red-500/20 mt-4 text-sm transition">
-          <LogOut size={18} /> Logout
-        </button>
-      </div>
-
-      <div className="flex-1 flex flex-col h-screen overflow-hidden">
-        <header className="bg-[var(--color-surface)] border-b border-[var(--color-border)] h-16 flex items-center justify-between px-8 shadow-sm flex-shrink-0">
-          <h2 className="text-xl font-bold text-[var(--color-primary-dark)]">Company Portal</h2>
-          <div className="text-sm font-medium text-[var(--color-text-secondary)]">{context}</div>
-        </header>
-        <div className="flex-1 p-8 overflow-y-auto">
-        <div className="max-w-2xl mx-auto">
-          <h2 className="text-2xl font-bold text-[var(--color-text-primary)] mb-2">End of Attachment Evaluation</h2>
-          
-          {loading ? (
-            <p className="text-[var(--color-text-secondary)]">Loading placement details...</p>
-          ) : (
-            <>
-              {placement && (
-                <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-100">
-                  <h3 className="font-semibold text-blue-800">Evaluating Student: {placement.student?.user?.name}</h3>
-                  <p className="text-sm text-blue-600">Reg No: {placement.student?.reg_number} | Dept: {placement.student?.department}</p>
-                </div>
-              )}
-
-              <form onSubmit={handleSubmit} className="bg-[var(--color-surface)] p-6 rounded-xl border border-[var(--color-border)] shadow-sm space-y-6">
-                
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold border-b pb-2">Rubric Scoring (1 - Poor, 5 - Excellent)</h3>
-                  
-                  {['punctuality', 'attitude', 'technical', 'teamwork', 'communication'].map(metric => (
-                    <div key={metric} className="flex items-center justify-between">
-                      <label className="text-sm font-medium text-[var(--color-text-primary)] capitalize w-1/3">
-                        {metric}
-                      </label>
-                      <div className="flex gap-4 w-2/3">
-                        {[1, 2, 3, 4, 5].map(score => (
-                          <label key={score} className="flex items-center gap-1 cursor-pointer">
-                            <input 
-                              type="radio" 
-                              name={metric} 
-                              value={score} 
-                              checked={form[`score_${metric}`] === score}
-                              onChange={() => setForm({...form, [`score_${metric}`]: score})}
-                              className="text-[var(--color-primary)] focus:ring-[var(--color-primary)]"
-                            />
-                            <span className="text-sm">{score}</span>
-                          </label>
-                        ))}
-                      </div>
+    <AppShell portal="company">
+      <div className="max-w-2xl">
+        <PageHeader kicker="End of attachment" title="Mark the student" subtitle="Score the work you actually saw, not the CV." />
+        {loading ? (
+          <p className="text-[var(--ink-soft)]">Loading…</p>
+        ) : (
+          <>
+            {placement && (
+              <div className="sheet p-4 mb-5">
+                <p className="font-display text-lg">{placement.student?.user?.name}</p>
+                <p className="text-sm text-[var(--ink-soft)]">{placement.student?.reg_number} · {placement.student?.department}</p>
+              </div>
+            )}
+            <form onSubmit={handleSubmit} className="sheet p-6 space-y-6">
+              <div className="space-y-4">
+                <h3 className="font-display text-lg border-b border-[var(--rule)] pb-2">Rubric (1 poor — 5 excellent)</h3>
+                {['punctuality', 'attitude', 'technical', 'teamwork', 'communication'].map(metric => (
+                  <div key={metric} className="flex items-center justify-between gap-4">
+                    <label className="text-sm capitalize w-1/3">{metric}</label>
+                    <div className="flex gap-4">
+                      {[1, 2, 3, 4, 5].map(score => (
+                        <label key={score} className="flex items-center gap-1 cursor-pointer text-sm">
+                          <input
+                            type="radio"
+                            name={metric}
+                            value={score}
+                            checked={form[`score_${metric}`] === score}
+                            onChange={() => setForm({ ...form, [`score_${metric}`]: score })}
+                          />
+                          {score}
+                        </label>
+                      ))}
                     </div>
-                  ))}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-2">Overall Remarks</label>
-                  <textarea 
-                    className="w-full border border-[var(--color-border)] rounded-lg px-4 py-2 h-32 resize-none"
-                    value={form.remarks}
-                    onChange={e => setForm({...form, remarks: e.target.value})}
-                    placeholder="Provide specific feedback about the student's performance..."
-                    required
-                  />
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <input 
-                    type="checkbox" 
-                    id="accept_again"
-                    checked={form.would_accept_again}
-                    onChange={e => setForm({...form, would_accept_again: e.target.checked})}
-                    className="rounded text-[var(--color-primary)] focus:ring-[var(--color-primary)]"
-                  />
-                  <label htmlFor="accept_again" className="text-sm font-medium text-[var(--color-text-primary)]">
-                    Would you accept this student again for future roles?
-                  </label>
-                </div>
-
-                <div className="pt-4 border-t border-[var(--color-border)] flex justify-end gap-3">
-                  <Link to="/company" className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition">Cancel</Link>
-                  <button type="submit" disabled={submitting} className="px-4 py-2 text-sm font-medium text-white bg-[var(--color-primary)] hover:bg-[var(--color-primary-light)] rounded-lg transition disabled:opacity-50">
-                    {submitting ? 'Submitting...' : 'Submit Evaluation'}
-                  </button>
-                </div>
-              </form>
-            </>
-          )}
-        </div>
-        </div>
+                  </div>
+                ))}
+              </div>
+              <label className="block text-sm font-semibold">
+                Remarks
+                <textarea
+                  className="input mt-2 h-32 resize-none font-normal"
+                  value={form.remarks}
+                  onChange={e => setForm({ ...form, remarks: e.target.value })}
+                  required
+                />
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={form.would_accept_again}
+                  onChange={e => setForm({ ...form, would_accept_again: e.target.checked })}
+                />
+                Would take this student again
+              </label>
+              <div className="flex justify-end gap-2 pt-3 border-t border-[var(--rule)]">
+                <Link to="/company" className="btn btn-ghost">Cancel</Link>
+                <button type="submit" disabled={submitting} className="btn btn-primary">
+                  {submitting ? 'Submitting…' : 'Submit evaluation'}
+                </button>
+              </div>
+            </form>
+          </>
+        )}
       </div>
-    </div>
+    </AppShell>
   );
 }

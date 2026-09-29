@@ -1,17 +1,13 @@
 import { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { GraduationCap, LogOut, Book, MessageSquare, UserCircle } from 'lucide-react';
+import { BookOpen } from 'lucide-react';
 import api from '../axios';
-import { useAuth } from '../context/AuthContext';
+import AppShell, { Stamp } from '../components/AppShell';
 
 export default function SupervisorDashboard() {
-  const { role, context, logout } = useAuth();
-
   const [placements, setPlacements] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedPlacement, setSelectedPlacement] = useState(null);
   const [comment, setComment] = useState('');
-  const navigate = useNavigate();
 
   useEffect(() => {
     api.get('/supervisors/students')
@@ -29,121 +25,87 @@ export default function SupervisorDashboard() {
     if (!comment.trim()) return;
     await api.post(`/logbooks/${entryId}/comments`, { comment });
     setComment('');
-    // Refresh placement
     openLogbook(selectedPlacement.id);
   };
 
-  const handleLogout = async () => {
-    await logout();
-    navigate('/login');
-  };
-
   return (
-    <div className="min-h-screen bg-[var(--color-bg)] flex">
-      <div className="w-64 bg-[var(--color-primary-dark)] text-white p-6 flex flex-col flex-shrink-0">
-        <h1 className="text-xl font-bold mb-8">Supervisor Portal</h1>
-        <nav className="flex-1 space-y-1">
-          <Link to="/supervisor" className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[var(--color-primary)] text-white text-sm">
-            <GraduationCap size={18} /> My Students
-          </Link>
-          <Link to="/messages" className="flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-[var(--color-primary)] text-white/90 text-sm">
-            <MessageSquare size={18} /> Messages
-          </Link>
-          <Link to="/profile" className="flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-[var(--color-primary)] text-white/90 text-sm">
-            <UserCircle size={18} /> My Profile
-          </Link>
-        </nav>
-        <button onClick={handleLogout} className="flex items-center gap-2 w-full text-left px-4 py-2 rounded-lg text-red-300 hover:bg-red-500/20 mt-4 text-sm transition">
-          <LogOut size={18} /> Logout
-        </button>
-      </div>
-
-      <div className="flex-1 flex flex-col h-screen overflow-hidden">
-        <header className="bg-[var(--color-surface)] border-b border-[var(--color-border)] h-16 flex items-center justify-between px-8 shadow-sm flex-shrink-0">
-          <h2 className="text-xl font-bold text-[var(--color-primary-dark)]">Supervisor Portal</h2>
-          <div className="text-sm font-medium text-[var(--color-text-secondary)]">{context}</div>
-        </header>
-
-        <div className="flex-1 flex overflow-hidden">
-          {/* Students list */}
-          <div className="w-96 p-6 border-r border-[var(--color-border)] overflow-y-auto">
-            <h2 className="text-xl font-bold text-[var(--color-text-primary)] mb-4">Assigned Students</h2>
-            {loading && <p className="text-[var(--color-text-secondary)]">Loading...</p>}
-            <div className="space-y-3">
-              {placements.map(p => (
-                <button key={p.id} onClick={() => openLogbook(p.id)} className={`w-full text-left p-4 rounded-xl border transition ${selectedPlacement?.id === p.id ? 'border-[var(--color-primary)] bg-green-50' : 'border-[var(--color-border)] bg-[var(--color-surface)] hover:border-[var(--color-primary-light)]'}`}>
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-full bg-[var(--color-primary-light)] flex items-center justify-center text-white font-bold">
-                      {p.student?.user?.name?.charAt(0) ?? 'S'}
-                    </div>
-                    <div>
-                      <p className="font-bold text-sm text-[var(--color-text-primary)]">{p.student?.user?.name}</p>
-                      <p className="text-xs text-[var(--color-text-secondary)]">{p.student?.reg_number}</p>
-                      <span className="inline-block mt-1 bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded-full">{p.status}</span>
-                    </div>
-                  </div>
-                </button>
-              ))}
-              {!loading && placements.length === 0 && (
-                <p className="text-[var(--color-text-secondary)]">No students assigned yet.</p>
-              )}
-            </div>
+    <AppShell portal="supervisor" pad={false}>
+      <div className="flex flex-col lg:flex-row h-full min-h-0">
+        <div className="lg:w-[22rem] shrink-0 p-5 border-b lg:border-b-0 lg:border-r border-[var(--rule)] overflow-y-auto bg-[var(--sheet)]">
+          <p className="page-kicker">Cohort</p>
+          <h2 className="font-display text-2xl mb-4">Assigned students</h2>
+          {loading && <p className="text-[var(--ink-soft)] text-sm">Loading…</p>}
+          <div className="space-y-2">
+            {placements.map(p => (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => openLogbook(p.id)}
+                className={`w-full text-left p-3 border transition ${
+                  selectedPlacement?.id === p.id
+                    ? 'border-[var(--copper)] bg-[rgba(184,92,56,0.08)]'
+                    : 'border-[var(--rule)] bg-[var(--sheet)] hover:border-[var(--forest)]'
+                }`}
+              >
+                <p className="font-semibold text-sm">{p.student?.user?.name}</p>
+                <p className="text-xs text-[var(--ink-soft)]">{p.student?.reg_number}</p>
+                <div className="mt-2"><Stamp tone={p.status === 'active' ? 'active' : 'draft'}>{p.status}</Stamp></div>
+              </button>
+            ))}
+            {!loading && placements.length === 0 && (
+              <p className="text-sm text-[var(--ink-soft)]">No students assigned yet.</p>
+            )}
           </div>
+        </div>
 
-          {/* Logbook view */}
-          <div className="flex-1 p-6 overflow-y-auto">
-            {!selectedPlacement ? (
-              <div className="flex items-center justify-center h-full text-[var(--color-text-secondary)]">
-                Select a student to view their logbook.
-              </div>
-            ) : (
-              <>
-              <h3 className="flex items-center gap-2 text-xl font-bold text-[var(--color-text-primary)] mb-4">
-                <Book size={24} /> Logbook — {selectedPlacement.student?.user?.name}
+        <div className="flex-1 overflow-y-auto p-6 md:p-8">
+          {!selectedPlacement ? (
+            <div className="h-full flex items-center justify-center text-[var(--ink-soft)] text-center px-6">
+              Pick a student. Their logbook should read like a week on the floor, not a template.
+            </div>
+          ) : (
+            <>
+              <h3 className="flex items-center gap-2 font-display text-2xl mb-5">
+                <BookOpen size={22} strokeWidth={1.6} /> {selectedPlacement.student?.user?.name}
               </h3>
               <div className="space-y-4">
                 {selectedPlacement.logbook_entries?.map(entry => (
-                  <div key={entry.id} className="bg-[var(--color-surface)] p-5 rounded-xl border border-[var(--color-border)]">
+                  <article key={entry.id} className="sheet p-5">
                     <div className="flex justify-between mb-2">
-                      <span className="font-bold text-[var(--color-primary)]">Week {entry.week_number}</span>
-                      <span className="text-sm text-[var(--color-text-secondary)]">{entry.entry_date}</span>
+                      <span className="font-display text-[var(--forest)]">Week {entry.week_number}</span>
+                      <span className="text-sm text-[var(--ink-soft)]">{entry.entry_date}</span>
                     </div>
-                    <p className="text-[var(--color-text-primary)] mb-1"><strong>Activities:</strong> {entry.activities}</p>
-                    {entry.lessons_learned && <p className="text-[var(--color-text-secondary)] text-sm"><strong>Lessons:</strong> {entry.lessons_learned}</p>}
-                    
-                    {/* Comments */}
+                    <p className="mb-1"><strong>Work:</strong> {entry.activities}</p>
+                    {entry.lessons_learned && <p className="text-sm text-[var(--ink-soft)]"><strong>Lessons:</strong> {entry.lessons_learned}</p>}
                     {entry.comments?.length > 0 && (
-                      <div className="mt-3 pt-3 border-t border-[var(--color-border)] space-y-2">
+                      <div className="mt-3 pt-3 border-t border-[var(--rule)] space-y-2">
                         {entry.comments.map(c => (
-                          <div key={c.id} className="bg-blue-50 px-3 py-2 rounded-lg text-sm">
-                            <span className="font-medium">{c.user?.name}:</span> {c.comment}
-                          </div>
+                          <p key={c.id} className="text-sm pl-3 border-l-2 border-[var(--copper)]">
+                            <span className="font-semibold">{c.user?.name}:</span> {c.comment}
+                          </p>
                         ))}
                       </div>
                     )}
-                    
-                    {/* Add Comment */}
                     <div className="mt-3 flex gap-2">
                       <input
                         type="text"
-                        className="flex-1 border border-[var(--color-border)] rounded-lg px-3 py-1.5 text-sm"
-                        placeholder="Add a comment..."
+                        className="input flex-1"
+                        placeholder="Leave a note…"
                         value={comment}
                         onChange={e => setComment(e.target.value)}
                       />
-                      <button onClick={() => submitComment(entry.id)} className="bg-[var(--color-primary)] text-white px-3 py-1.5 rounded-lg text-sm">Send</button>
+                      <button type="button" onClick={() => submitComment(entry.id)} className="btn btn-primary">Note</button>
                     </div>
-                  </div>
+                  </article>
                 ))}
                 {selectedPlacement.logbook_entries?.length === 0 && (
-                  <p className="text-[var(--color-text-secondary)]">No logbook entries yet.</p>
+                  <p className="text-[var(--ink-soft)]">No logbook entries yet.</p>
                 )}
               </div>
             </>
           )}
         </div>
-        </div>
       </div>
-    </div>
+    </AppShell>
   );
 }

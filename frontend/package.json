@@ -23,7 +23,7 @@
     "lucide-react": "^1.24.0",
     "oxlint": "^1.71.0",
     "postcss": "^8.5.16",
-    "react-router-dom": "^7.18.1",
+    "react-router-dom": "^7.11.0",
     "tailwindcss": "^4.3.2",
     "vite": "^8.1.1"
   }

@@ -1,13 +1,11 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { User, Lock, Mail, Upload, Tag, Phone, AlertCircle, CheckCircle, ArrowLeft, Shield } from 'lucide-react';
+import { User, Lock, Mail, Upload, Tag, Phone, AlertCircle, CheckCircle, Shield } from 'lucide-react';
 import api from '../axios';
 import { useAuth } from '../context/AuthContext';
+import AppShell, { portalFromRole } from '../components/AppShell';
 
 export default function ProfilePage() {
-  const { role, context, logout } = useAuth();
-
-  const navigate = useNavigate();
+  const { role } = useAuth();
 
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -153,15 +151,6 @@ export default function ProfilePage() {
     setStudentForm(f => ({ ...f, skills: f.skills.filter(s => s !== skill) }));
   };
 
-  const getBackLink = () => {
-    if (role === 'student') return '/student';
-    if (role === 'company' || role === 'company_supervisor') return '/company';
-    if (role === 'institution_supervisor') return '/supervisor';
-    if (role === 'institution_admin') return '/institution';
-    if (role === 'super_admin') return '/superadmin';
-    return '/';
-  };
-
   const tabs = [
     { id: 'personal', label: 'Personal Info', icon: <User size={16} /> },
     { id: 'email', label: 'Email', icon: <Mail size={16} /> },
@@ -170,61 +159,49 @@ export default function ProfilePage() {
   ];
 
   if (loading) return (
-    <div className="min-h-screen bg-[var(--color-bg)] flex items-center justify-center">
-      <div className="text-[var(--color-text-secondary)]">Loading profile...</div>
-    </div>
+    <AppShell portal={portalFromRole(role)}>
+      <p className="text-[var(--ink-soft)]">Loading profile…</p>
+    </AppShell>
   );
 
   return (
-    <div className="min-h-screen bg-[var(--color-bg)]">
-      {/* Header */}
-      <header className="bg-[var(--color-surface)] border-b border-[var(--color-border)] h-16 flex items-center justify-between px-8 shadow-sm">
-        <div className="flex items-center gap-4">
-          <Link to={getBackLink()} className="flex items-center gap-1 text-sm text-[var(--color-text-secondary)] hover:text-[var(--color-primary)] transition">
-            <ArrowLeft size={16} /> Back
-          </Link>
-          <h1 className="text-xl font-bold text-[var(--color-primary-dark)]">My Profile</h1>
-        </div>
-        <span className="text-sm text-[var(--color-text-secondary)] capitalize">{role?.replace('_', ' ')}</span>
-      </header>
+    <AppShell portal={portalFromRole(role)}>
+      <div className="max-w-3xl">
+        <p className="page-kicker">Account</p>
+        <h1 className="font-display text-[2rem] mb-6">Your details</h1>
 
-      <div className="max-w-3xl mx-auto p-8">
-
-        {/* Feedback Banner */}
         {feedback.message && (
-          <div className={`mb-6 flex items-center gap-3 px-5 py-3 rounded-xl text-sm font-medium shadow-sm animate-pulse ${feedback.type === 'error' ? 'bg-red-50 border border-red-200 text-red-700' : 'bg-green-50 border border-green-200 text-green-700'}`}>
+          <div className={`mb-6 flex items-center gap-3 px-4 py-3 text-sm ${feedback.type === 'error' ? 'border border-[var(--stamp)] text-[var(--stamp)]' : 'border border-[var(--forest)] text-[var(--forest)]'}`}>
             {feedback.type === 'error' ? <AlertCircle size={18} /> : <CheckCircle size={18} />}
             {feedback.message}
           </div>
         )}
 
-        {/* Profile Photo Card */}
-        <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6 mb-6 flex items-center gap-6 shadow-sm">
+        <div className="sheet p-6 mb-5 flex items-center gap-5">
           <div className="relative group">
-            <div className="h-20 w-20 rounded-full bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-accent)] flex items-center justify-center text-white text-3xl font-bold shadow-lg">
+            <div className="h-20 w-20 bg-[var(--forest)] text-[#f7f1e6] flex items-center justify-center font-display text-3xl">
               {profile?.user?.name?.charAt(0)?.toUpperCase() || '?'}
             </div>
-            <label className="absolute inset-0 rounded-full bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition cursor-pointer">
+            <label className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition cursor-pointer">
               <Upload size={20} className="text-white" />
               <input type="file" accept="image/jpg,image/jpeg,image/png" className="hidden" onChange={handlePhotoUpload} />
             </label>
           </div>
           <div>
-            <h2 className="text-xl font-bold text-[var(--color-text-primary)]">{profile?.user?.name}</h2>
-            <p className="text-[var(--color-text-secondary)] text-sm">{profile?.user?.email}</p>
-            <p className="text-xs text-[var(--color-text-secondary)] mt-1">Hover over avatar to change photo (JPG/PNG, max 2MB)</p>
+            <h2 className="font-display text-xl">{profile?.user?.name}</h2>
+            <p className="text-[var(--ink-soft)] text-sm">{profile?.user?.email}</p>
+            <p className="text-xs text-[var(--ink-soft)] mt-1">Hover the initial to change the photo</p>
           </div>
           {profile?.user?.email_verified_at === null && (
-            <div className="ml-auto flex items-center gap-2 bg-yellow-50 border border-yellow-200 text-yellow-700 text-xs px-3 py-1.5 rounded-full">
+            <div className="ml-auto flex items-center gap-2 text-[var(--warning)] text-xs border border-[var(--rule)] px-3 py-1.5">
               <AlertCircle size={14} /> Email unverified
             </div>
           )}
         </div>
 
-        {/* Locked Fields Banner */}
-        <div className="bg-blue-50 border border-blue-200 rounded-xl px-5 py-3 mb-6 flex items-start gap-3 text-sm text-blue-700">
+        <div className="sheet px-5 py-3 mb-6 flex items-start gap-3 text-sm text-[var(--ink-soft)]">
           <Shield size={16} className="mt-0.5 flex-shrink-0" />
-          <span>Some fields like <strong>Registration Number</strong>, <strong>Institution</strong>, and <strong>Role</strong> are managed by your administrator and cannot be changed here.</span>
+          <span>Registration number, institution, and role are locked by your office.</span>
         </div>
 
         {/* Tabs */}
@@ -233,7 +210,7 @@ export default function ProfilePage() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition -mb-px ${activeTab === tab.id ? 'border-[var(--color-primary)] text-[var(--color-primary)]' : 'border-transparent text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]'}`}
+              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition -mb-px ${activeTab === tab.id ? 'border-[var(--copper)] text-[var(--ink)]' : 'border-transparent text-[var(--ink-soft)]'}`}
             >
               {tab.icon} {tab.label}
             </button>
@@ -242,8 +219,8 @@ export default function ProfilePage() {
 
         {/* ── PERSONAL INFO TAB ── */}
         {activeTab === 'personal' && (
-          <form onSubmit={handlePersonalSave} className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6 shadow-sm space-y-5">
-            <h3 className="font-bold text-[var(--color-text-primary)] text-lg">Personal Information</h3>
+          <form onSubmit={handlePersonalSave} className="sheet p-6 space-y-5">
+            <h3 className="font-display text-xl">Personal information</h3>
 
             {/* Name — all roles */}
             <div>
@@ -348,7 +325,7 @@ export default function ProfilePage() {
             )}
 
             <button type="submit" disabled={saving}
-              className="w-full bg-[var(--color-primary)] hover:bg-[var(--color-primary-light)] text-white font-semibold py-2.5 rounded-xl transition disabled:opacity-60">
+              className="btn btn-primary w-full">
               {saving ? 'Saving...' : 'Save Changes'}
             </button>
           </form>
@@ -356,9 +333,9 @@ export default function ProfilePage() {
 
         {/* ── EMAIL TAB ── */}
         {activeTab === 'email' && (
-          <form onSubmit={handleEmailSave} className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6 shadow-sm space-y-5">
-            <h3 className="font-bold text-[var(--color-text-primary)] text-lg">Change Email Address</h3>
-            <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-xl text-sm text-yellow-800 flex gap-3">
+          <form onSubmit={handleEmailSave} className="sheet p-6 space-y-5">
+            <h3 className="font-display text-xl">Change email</h3>
+            <div className="p-4 border border-[var(--rule)] text-sm flex gap-3">
               <AlertCircle size={16} className="mt-0.5 flex-shrink-0" />
               <span>Changing your email will require re-verification. A verification link will be sent to the new address and your account will be temporarily marked as unverified.</span>
             </div>
@@ -368,7 +345,7 @@ export default function ProfilePage() {
                 className="w-full border border-[var(--color-border)] rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" required />
             </div>
             <button type="submit" disabled={saving}
-              className="w-full bg-[var(--color-primary)] hover:bg-[var(--color-primary-light)] text-white font-semibold py-2.5 rounded-xl transition disabled:opacity-60">
+              className="btn btn-primary w-full">
               {saving ? 'Saving...' : 'Update Email'}
             </button>
           </form>
@@ -376,8 +353,8 @@ export default function ProfilePage() {
 
         {/* ── PASSWORD TAB ── */}
         {activeTab === 'password' && (
-          <form onSubmit={handlePasswordSave} className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6 shadow-sm space-y-5">
-            <h3 className="font-bold text-[var(--color-text-primary)] text-lg">Change Password</h3>
+          <form onSubmit={handlePasswordSave} className="sheet p-6 space-y-5">
+            <h3 className="font-display text-xl">Change password</h3>
             <div>
               <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-1">Current Password</label>
               <input type="password" value={passwordForm.current_password} onChange={e => setPasswordForm(f => ({ ...f, current_password: e.target.value }))}
@@ -396,7 +373,7 @@ export default function ProfilePage() {
                 className="w-full border border-[var(--color-border)] rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" required />
             </div>
             <button type="submit" disabled={saving}
-              className="w-full bg-[var(--color-primary)] hover:bg-[var(--color-primary-light)] text-white font-semibold py-2.5 rounded-xl transition disabled:opacity-60">
+              className="btn btn-primary w-full">
               {saving ? 'Updating...' : 'Update Password'}
             </button>
           </form>
@@ -404,32 +381,31 @@ export default function ProfilePage() {
 
         {/* ── CV & DOCS TAB (student only) ── */}
         {activeTab === 'documents' && role === 'student' && (
-          <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] p-6 shadow-sm space-y-6">
-            <h3 className="font-bold text-[var(--color-text-primary)] text-lg">CV & Transcript</h3>
+          <div className="sheet p-6 space-y-6">
+            <h3 className="font-display text-xl">CV & transcript</h3>
 
-            {/* CV Upload */}
-            <div className="border-2 border-dashed border-[var(--color-border)] rounded-xl p-6 text-center hover:border-[var(--color-primary)] transition">
+            <div className="border border-dashed border-[var(--rule)] p-6 text-center">
               <Upload size={28} className="mx-auto text-[var(--color-primary)] mb-2" />
               <p className="font-semibold text-[var(--color-text-primary)] mb-1">Upload CV</p>
               <p className="text-sm text-[var(--color-text-secondary)] mb-4">PDF only, max 5MB. Replaces your current CV.</p>
               {profile?.student?.cv_path && (
                 <p className="text-xs text-green-600 mb-3">✓ CV on file</p>
               )}
-              <label className="inline-block cursor-pointer bg-[var(--color-primary)] hover:bg-[var(--color-primary-light)] text-white text-sm px-5 py-2 rounded-lg transition">
+              <label className="inline-block cursor-pointer btn btn-primary">
                 Choose CV (PDF)
                 <input type="file" accept="application/pdf" className="hidden" onChange={handleCvUpload} />
               </label>
             </div>
 
             {/* Transcript Upload */}
-            <div className="border-2 border-dashed border-[var(--color-border)] rounded-xl p-6 text-center hover:border-[var(--color-primary)] transition">
+            <div className="border border-dashed border-[var(--rule)] p-6 text-center">
               <Upload size={28} className="mx-auto text-[var(--color-accent)] mb-2" />
               <p className="font-semibold text-[var(--color-text-primary)] mb-1">Upload Transcript</p>
               <p className="text-sm text-[var(--color-text-secondary)] mb-4">PDF only, max 5MB. Replaces your current transcript.</p>
               {profile?.student?.transcript_path && (
                 <p className="text-xs text-green-600 mb-3">✓ Transcript on file</p>
               )}
-              <label className="inline-block cursor-pointer bg-[var(--color-accent)] hover:opacity-90 text-white text-sm px-5 py-2 rounded-lg transition">
+              <label className="inline-block cursor-pointer btn btn-copper">
                 Choose Transcript (PDF)
                 <input type="file" accept="application/pdf" className="hidden" onChange={handleTranscriptUpload} />
               </label>
@@ -438,6 +414,6 @@ export default function ProfilePage() {
         )}
 
       </div>
-    </div>
+    </AppShell>
   );
 }

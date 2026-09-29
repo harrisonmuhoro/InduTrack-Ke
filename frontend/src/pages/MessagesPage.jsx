@@ -1,11 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
 import api from '../axios';
 import { useAuth } from '../context/AuthContext';
+import AppShell, { portalFromRole } from '../components/AppShell';
 
 export default function MessagesPage() {
-  const { role, context, logout } = useAuth();
+  const { role } = useAuth();
 
   const [conversations, setConversations] = useState([]);
   const [activePartnerId, setActivePartnerId] = useState(null);
@@ -13,7 +12,6 @@ export default function MessagesPage() {
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
-  const navigate = useNavigate();
   const messagesEndRef = useRef(null);
   
   // Just grabbing current user ID from token or making assumption. 
@@ -75,45 +73,29 @@ export default function MessagesPage() {
     }
   };
 
-  const handleGoBack = () => {
-    if (role === 'student') navigate('/student');
-    else if (role === 'company_supervisor') navigate('/company');
-    else if (role === 'institution_supervisor') navigate('/supervisor');
-    else if (role === 'institution_admin') navigate('/institution');
-    else navigate(-1);
-  };
-
   return (
-    <div className="min-h-screen bg-[var(--color-bg)] flex flex-col">
-      <header className="bg-[var(--color-surface)] border-b border-[var(--color-border)] h-16 flex items-center justify-between px-8 shadow-sm">
-        <div className="flex items-center gap-4">
-          <button onClick={handleGoBack} className="flex items-center gap-1 text-gray-500 hover:text-gray-900 transition">
-            <ArrowLeft size={16} /> Back to Dashboard
-          </button>
-          <h1 className="text-xl font-bold text-[var(--color-primary-dark)]">Messages</h1>
-        </div>
-      </header>
-
-      <div className="flex-1 flex overflow-hidden">
-        {/* Sidebar: Conversations List */}
-        <div className="w-80 bg-white border-r border-[var(--color-border)] flex flex-col">
-          <div className="p-4 border-b">
-            <h2 className="font-bold text-gray-800">Recent Conversations</h2>
+    <AppShell portal={portalFromRole(role)} pad={false}>
+      <div className="flex h-full min-h-0">
+        <div className="w-72 shrink-0 bg-[var(--sheet)] border-r border-[var(--rule)] flex flex-col">
+          <div className="p-4 border-b border-[var(--rule)]">
+            <p className="page-kicker">Mail</p>
+            <h2 className="font-display text-xl">Threads</h2>
           </div>
           <div className="flex-1 overflow-y-auto">
-            {loading ? <p className="p-4 text-gray-500 text-sm">Loading...</p> : (
+            {loading ? <p className="p-4 text-[var(--ink-soft)] text-sm">Loading…</p> : (
               conversations.map(conv => (
                 <button
                   key={conv.partner_id}
+                  type="button"
                   onClick={() => setActivePartnerId(conv.partner_id)}
-                  className={`w-full text-left p-4 border-b hover:bg-gray-50 transition flex items-center justify-between ${activePartnerId === conv.partner_id ? 'bg-blue-50' : ''}`}
+                  className={`w-full text-left p-4 border-b border-[var(--rule)] flex items-center justify-between ${activePartnerId === conv.partner_id ? 'bg-[rgba(184,92,56,0.08)]' : ''}`}
                 >
                   <div className="overflow-hidden">
-                    <p className="font-semibold text-sm text-gray-900 truncate">{conv.partner_name}</p>
-                    <p className="text-xs text-gray-500 truncate">{conv.last_message}</p>
+                    <p className="font-semibold text-sm truncate">{conv.partner_name}</p>
+                    <p className="text-xs text-[var(--ink-soft)] truncate">{conv.last_message}</p>
                   </div>
                   {conv.unread_count > 0 && (
-                    <span className="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
+                    <span className="bg-[var(--stamp)] text-white text-[10px] font-bold px-2 py-0.5">
                       {conv.unread_count}
                     </span>
                   )}
@@ -121,34 +103,32 @@ export default function MessagesPage() {
               ))
             )}
             {!loading && conversations.length === 0 && (
-              <p className="p-4 text-gray-500 text-sm">No conversations yet.</p>
+              <p className="p-4 text-[var(--ink-soft)] text-sm">No conversations yet.</p>
             )}
           </div>
         </div>
 
-        {/* Main: Chat Area */}
-        <div className="flex-1 flex flex-col bg-gray-50">
+        <div className="flex-1 flex flex-col min-w-0">
           {!activePartnerId ? (
-            <div className="flex-1 flex items-center justify-center text-gray-400">
-              Select a conversation to start messaging
+            <div className="flex-1 flex items-center justify-center text-[var(--ink-soft)] px-6 text-center">
+              Pick a thread. Keep it short — like a note left on a desk.
             </div>
           ) : (
             <>
-              <div className="p-4 bg-white border-b shadow-sm flex items-center justify-between">
-                <h3 className="font-bold text-gray-800">
+              <div className="p-4 bg-[var(--sheet)] border-b border-[var(--rule)]">
+                <h3 className="font-display text-xl">
                   {conversations.find(c => c.partner_id === activePartnerId)?.partner_name || 'Chat'}
                 </h3>
               </div>
-              
-              <div className="flex-1 overflow-y-auto p-6 space-y-4">
-                {loadingMessages ? <p className="text-gray-500 text-center">Loading messages...</p> : (
+              <div className="flex-1 overflow-y-auto p-6 space-y-3">
+                {loadingMessages ? <p className="text-[var(--ink-soft)] text-center">Loading…</p> : (
                   messages.map(msg => {
-                    const isMine = msg.sender_id !== activePartnerId; // Approximate
+                    const isMine = msg.sender_id !== activePartnerId;
                     return (
                       <div key={msg.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
-                        <div className={`max-w-[70%] rounded-2xl px-4 py-2 text-sm ${isMine ? 'bg-[var(--color-primary)] text-white rounded-br-none' : 'bg-white border text-gray-800 rounded-bl-none'}`}>
+                        <div className={`max-w-[70%] px-3 py-2 text-sm ${isMine ? 'bg-[var(--forest)] text-[#f7f1e6]' : 'sheet'}`}>
                           {msg.body}
-                          <div className={`text-[10px] mt-1 text-right ${isMine ? 'text-white/70' : 'text-gray-400'}`}>
+                          <div className={`text-[10px] mt-1 ${isMine ? 'text-white/70' : 'text-[var(--ink-soft)]'}`}>
                             {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           </div>
                         </div>
@@ -158,17 +138,16 @@ export default function MessagesPage() {
                 )}
                 <div ref={messagesEndRef} />
               </div>
-
-              <div className="p-4 bg-white border-t">
+              <div className="p-4 bg-[var(--sheet)] border-t border-[var(--rule)]">
                 <form onSubmit={handleSend} className="flex gap-2">
                   <input
                     type="text"
                     value={newMessage}
                     onChange={e => setNewMessage(e.target.value)}
-                    placeholder="Type your message..."
-                    className="flex-1 border border-gray-300 rounded-full px-4 py-2 focus:outline-none focus:border-[var(--color-primary)] text-sm"
+                    placeholder="Write a note…"
+                    className="input flex-1"
                   />
-                  <button type="submit" disabled={!newMessage.trim()} className="bg-[var(--color-primary)] text-white rounded-full px-6 py-2 text-sm font-bold hover:bg-blue-700 transition disabled:opacity-50">
+                  <button type="submit" disabled={!newMessage.trim()} className="btn btn-primary">
                     Send
                   </button>
                 </form>
@@ -177,6 +156,6 @@ export default function MessagesPage() {
           )}
         </div>
       </div>
-    </div>
+    </AppShell>
   );
 }

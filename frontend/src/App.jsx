@@ -1,7 +1,7 @@
 import { Routes, Route, Link, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import { useAuth } from './context/AuthContext';
-import api from './axios';
+import api, { initializeCsrf } from './axios';
 import StudentDashboard from './pages/StudentDashboard';
 import StudentLogbook from './pages/StudentLogbook';
 import StudentSmartMatch from './pages/StudentSmartMatch';
@@ -39,7 +39,7 @@ function Login() {
     e.preventDefault();
     setError('');
     try {
-      await api.get('/sanctum/csrf-cookie'); // Initialize CSRF cookie
+      await initializeCsrf(); // Sanctum's CSRF endpoint is outside /api
       const res = await api.post('/auth/login', { email, password });
       
       if (res.data['2fa_required']) {
@@ -103,6 +103,7 @@ function Login() {
               <label className="block text-[var(--color-text-secondary)] text-sm font-medium mb-1">Email</label>
               <input 
                 type="email" 
+                autoComplete="username"
                 className="w-full border border-[var(--color-border)] rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -112,7 +113,8 @@ function Login() {
             <div>
               <label className="block text-[var(--color-text-secondary)] text-sm font-medium mb-1">Password</label>
               <input 
-                type="password" 
+                type="password"
+                autoComplete="current-password"
                 className="w-full border border-[var(--color-border)] rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}

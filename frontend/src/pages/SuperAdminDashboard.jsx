@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { Settings, Megaphone, BarChart, Building, Users, MessageSquare, UserCircle } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Megaphone } from 'lucide-react';
 import api from '../axios';
 import { useAuth } from '../context/AuthContext';
+import AppShell, { PageHeader, Stamp, Modal } from '../components/AppShell';
 
 export default function SuperAdminDashboard() {
-  const { role, context, logout } = useAuth();
-
+  const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [metrics, setMetrics] = useState(null);
@@ -14,8 +14,6 @@ export default function SuperAdminDashboard() {
   const [institutions, setInstitutions] = useState([]);
   const [users, setUsers] = useState({ data: [] });
   const [loading, setLoading] = useState(true);
-
-  // Modal states
   const [showInstitutionModal, setShowInstitutionModal] = useState(false);
   const [showUserModal, setShowUserModal] = useState(false);
   const [showBroadcastModal, setShowBroadcastModal] = useState(false);
@@ -24,7 +22,14 @@ export default function SuperAdminDashboard() {
   const [broadcastMsg, setBroadcastMsg] = useState('');
   const [userFilter, setUserFilter] = useState({ role: '', search: '' });
 
-  useEffect(() => { fetchData(); }, [activeTab]);
+  useEffect(() => {
+    if (authLoading) return;
+    if (!user) {
+      navigate('/login', { replace: true });
+      return;
+    }
+    fetchData();
+  }, [activeTab, authLoading, user]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -48,14 +53,12 @@ export default function SuperAdminDashboard() {
       }
     } catch (err) {
       console.error(err);
+      if (err.response?.status === 401) {
+        navigate('/login', { replace: true });
+      }
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleLogout = async () => {
-    await logout();
-    navigate('/login');
   };
 
   const handleAddInstitution = async (e) => {
@@ -74,7 +77,7 @@ export default function SuperAdminDashboard() {
     try {
       await api.put(`/superadmin/institutions/${id}/toggle`);
       fetchData();
-    } catch (err) {
+    } catch {
       alert('Failed to toggle institution');
     }
   };
@@ -96,7 +99,7 @@ export default function SuperAdminDashboard() {
     try {
       await api.delete(`/superadmin/users/${id}`);
       fetchData();
-    } catch (err) {
+    } catch {
       alert('Failed to disable user');
     }
   };
@@ -108,281 +111,202 @@ export default function SuperAdminDashboard() {
       alert(res.data.message);
       setShowBroadcastModal(false);
       setBroadcastMsg('');
-    } catch (err) {
+    } catch {
       alert('Failed to broadcast');
     }
   };
 
   const tabs = [
-    { id: 'dashboard', label: <span className="flex items-center gap-2"><BarChart size={16} /> Dashboard</span> },
-    { id: 'institutions', label: <span className="flex items-center gap-2"><Building size={16} /> Institutions</span> },
-    { id: 'users', label: <span className="flex items-center gap-2"><Users size={16} /> Users</span> },
+    { id: 'dashboard', label: 'Overview' },
+    { id: 'institutions', label: 'Institutions' },
+    { id: 'users', label: 'Users' },
   ];
 
   return (
-    <div className="min-h-screen bg-[#0F172A] flex flex-col text-white">
-      {/* Header */}
-      <header className="bg-[#1E293B] border-b border-gray-700 h-16 flex items-center justify-between px-8 shadow-sm">
-        <div className="flex items-center gap-8">
-          <h1 className="text-xl font-bold text-white flex items-center gap-2">
-            <Settings size={24} /> Super Admin
-          </h1>
-          <nav className="flex gap-1">
-            {tabs.map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition ${activeTab === tab.id ? 'bg-white text-[#0F172A]' : 'text-gray-300 hover:bg-gray-700'}`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </nav>
+    <AppShell portal="superadmin">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <div className="flex gap-1 border-b border-[var(--rule)]">
+          {tabs.map(tab => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              className={`px-3 py-2 text-sm border-b-2 -mb-px ${
+                activeTab === tab.id ? 'border-[var(--copper)] font-semibold' : 'border-transparent text-[var(--ink-soft)]'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
-        <div className="flex items-center gap-4">
-          <span className="text-sm font-medium text-gray-400">{context}</span>
-          <Link to="/messages" className="text-sm font-medium text-blue-400 hover:text-blue-300 flex items-center gap-1">
-            <MessageSquare size={16} /> Messages
-          </Link>
-          <Link to="/profile" className="text-sm font-medium text-purple-400 hover:text-purple-300 flex items-center gap-1">
-            <UserCircle size={16} /> My Profile
-          </Link>
-          <button onClick={() => setShowBroadcastModal(true)} className="flex items-center gap-2 bg-yellow-500 hover:bg-yellow-600 text-black px-3 py-1.5 rounded-lg text-sm font-bold transition">
-            <Megaphone size={16} /> Broadcast
-          </button>
-          <button onClick={handleLogout} className="text-sm font-medium text-red-400 hover:text-red-300">Logout</button>
-        </div>
-      </header>
-
-      <div className="flex-1 p-8 overflow-y-auto">
-        {loading && <p className="text-gray-400">Loading...</p>}
-
-        {/* ─── Dashboard Tab ──────────────────────────────────────────────── */}
-        {!loading && activeTab === 'dashboard' && metrics && (
-          <div>
-            <h2 className="text-2xl font-bold mb-6">System Overview</h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
-              {[
-                { label: 'Institutions', value: metrics.totalInstitutions, color: '#818CF8' },
-                { label: 'Active', value: metrics.activeInstitutions, color: '#34D399' },
-                { label: 'Total Users', value: metrics.totalUsers, color: '#60A5FA' },
-                { label: 'Students', value: metrics.totalStudents, color: '#F472B6' },
-                { label: 'Companies', value: metrics.totalCompanies, color: '#FBBF24' },
-                { label: 'Placements', value: metrics.totalPlacements, color: '#A78BFA' },
-              ].map(card => (
-                <div key={card.label} className="bg-[#1E293B] p-5 rounded-xl border border-gray-700">
-                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{card.label}</p>
-                  <p className="text-3xl font-extrabold mt-2" style={{ color: card.color }}>{card.value}</p>
-                </div>
-              ))}
-            </div>
-
-            {systemStats && (
-              <div>
-                <h3 className="text-lg font-bold mb-4 text-gray-300">System Statistics</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="bg-[#1E293B] p-5 rounded-xl border border-gray-700">
-                    <p className="text-xs text-gray-400 uppercase">Storage Used</p>
-                    <p className="text-xl font-bold text-blue-400 mt-1">{systemStats.storage_used}</p>
-                  </div>
-                  <div className="bg-[#1E293B] p-5 rounded-xl border border-gray-700">
-                    <p className="text-xs text-gray-400 uppercase">Total Documents</p>
-                    <p className="text-xl font-bold text-green-400 mt-1">{systemStats.total_documents}</p>
-                  </div>
-                  <div className="bg-[#1E293B] p-5 rounded-xl border border-gray-700">
-                    <p className="text-xs text-gray-400 uppercase">Total Logbook Entries</p>
-                    <p className="text-xl font-bold text-purple-400 mt-1">{systemStats.total_logbook_entries}</p>
-                  </div>
-                  <div className="bg-[#1E293B] p-5 rounded-xl border border-gray-700">
-                    <p className="text-xs text-gray-400 uppercase">Total Evaluations</p>
-                    <p className="text-xl font-bold text-yellow-400 mt-1">{systemStats.total_evaluations}</p>
-                  </div>
-                  <div className="bg-[#1E293B] p-5 rounded-xl border border-gray-700">
-                    <p className="text-xs text-gray-400 uppercase">Field Visits</p>
-                    <p className="text-xl font-bold text-pink-400 mt-1">{systemStats.total_field_visits}</p>
-                  </div>
-                  <div className="bg-[#1E293B] p-5 rounded-xl border border-gray-700">
-                    <p className="text-xs text-gray-400 uppercase">Messages</p>
-                    <p className="text-xl font-bold text-indigo-400 mt-1">{systemStats.total_messages}</p>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ─── Institutions Tab ───────────────────────────────────────────── */}
-        {!loading && activeTab === 'institutions' && (
-          <div>
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-bold">Institutions</h2>
-              <button onClick={() => setShowInstitutionModal(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition">+ Add Institution</button>
-            </div>
-            <div className="bg-[#1E293B] rounded-xl border border-gray-700 overflow-hidden">
-              <table className="w-full text-left text-sm">
-                <thead className="bg-[#334155] border-b border-gray-600">
-                  <tr><th className="p-4">Name</th><th className="p-4">Domain</th><th className="p-4">Contact</th><th className="p-4">Status</th><th className="p-4">Actions</th></tr>
-                </thead>
-                <tbody>
-                  {institutions.map(inst => (
-                    <tr key={inst.id} className="border-b border-gray-700">
-                      <td className="p-4 font-medium">{inst.name}</td>
-                      <td className="p-4 text-gray-400">{inst.domain || '—'}</td>
-                      <td className="p-4 text-gray-400">{inst.contact_email || '—'}</td>
-                      <td className="p-4">
-                        <span className={`px-2 py-1 rounded-full text-xs font-bold ${inst.is_active ? 'bg-green-900/50 text-green-400' : 'bg-red-900/50 text-red-400'}`}>
-                          {inst.is_active ? 'Active' : 'Disabled'}
-                        </span>
-                      </td>
-                      <td className="p-4">
-                        <button onClick={() => toggleInstitution(inst.id)} className={`px-3 py-1 rounded text-xs font-medium ${inst.is_active ? 'bg-red-700 hover:bg-red-600' : 'bg-green-700 hover:bg-green-600'}`}>
-                          {inst.is_active ? 'Disable' : 'Enable'}
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                  {institutions.length === 0 && <tr><td colSpan={5} className="p-4 text-center text-gray-500">No institutions found.</td></tr>}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {/* ─── Users Tab ──────────────────────────────────────────────────── */}
-        {!loading && activeTab === 'users' && (
-          <div>
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-bold">User Management</h2>
-              <button onClick={() => setShowUserModal(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition">+ Create User</button>
-            </div>
-
-            <div className="flex gap-3 mb-4">
-              <select value={userFilter.role} onChange={e => setUserFilter({...userFilter, role: e.target.value})} className="bg-[#1E293B] text-white border border-gray-600 rounded-lg px-3 py-2 text-sm">
-                <option value="">All Roles</option>
-                <option value="student">Student</option>
-                <option value="company_supervisor">Company Supervisor</option>
-                <option value="institution_supervisor">Academic Supervisor</option>
-                <option value="institution_admin">Institution Admin</option>
-                <option value="super_admin">Super Admin</option>
-              </select>
-              <input type="text" placeholder="Search by name or email..." value={userFilter.search} onChange={e => setUserFilter({...userFilter, search: e.target.value})} className="bg-[#1E293B] text-white border border-gray-600 rounded-lg px-3 py-2 text-sm flex-1" />
-              <button onClick={fetchData} className="bg-gray-600 hover:bg-gray-500 px-4 py-2 rounded-lg text-sm font-medium">Filter</button>
-            </div>
-
-            <div className="bg-[#1E293B] rounded-xl border border-gray-700 overflow-hidden">
-              <table className="w-full text-left text-sm">
-                <thead className="bg-[#334155] border-b border-gray-600">
-                  <tr><th className="p-4">Name</th><th className="p-4">Email</th><th className="p-4">Role</th><th className="p-4">Joined</th><th className="p-4">Actions</th></tr>
-                </thead>
-                <tbody>
-                  {(users.data || []).map(user => (
-                    <tr key={user.id} className="border-b border-gray-700">
-                      <td className="p-4 font-medium">{user.name}</td>
-                      <td className="p-4 text-gray-400">{user.email}</td>
-                      <td className="p-4">
-                        <span className="px-2 py-1 bg-indigo-900/50 text-indigo-300 rounded-full text-xs font-bold uppercase">
-                          {user.roles?.[0]?.name || '—'}
-                        </span>
-                      </td>
-                      <td className="p-4 text-gray-400">{new Date(user.created_at).toLocaleDateString()}</td>
-                      <td className="p-4">
-                        <button onClick={() => disableUser(user.id)} className="bg-red-700 hover:bg-red-600 px-3 py-1 rounded text-xs font-medium">Disable</button>
-                      </td>
-                    </tr>
-                  ))}
-                  {(users.data || []).length === 0 && <tr><td colSpan={5} className="p-4 text-center text-gray-500">No users found.</td></tr>}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
+        <button type="button" onClick={() => setShowBroadcastModal(true)} className="btn btn-copper">
+          <Megaphone size={15} /> Broadcast
+        </button>
       </div>
 
-      {/* ─── Add Institution Modal ─────────────────────────────────────────── */}
+      {loading && <p className="text-[var(--ink-soft)]">Loading…</p>}
+
+      {!loading && activeTab === 'dashboard' && metrics && (
+        <div>
+          <PageHeader kicker="National office" title="The whole ledger" />
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-8">
+            {[
+              { label: 'Institutions', value: metrics.totalInstitutions },
+              { label: 'Active', value: metrics.activeInstitutions },
+              { label: 'Users', value: metrics.totalUsers },
+              { label: 'Students', value: metrics.totalStudents },
+              { label: 'Companies', value: metrics.totalCompanies },
+              { label: 'Placements', value: metrics.totalPlacements },
+            ].map(card => (
+              <div key={card.label} className="sheet p-4">
+                <p className="text-[0.65rem] uppercase tracking-[0.12em] text-[var(--ink-soft)]">{card.label}</p>
+                <p className="font-display text-2xl mt-1">{card.value}</p>
+              </div>
+            ))}
+          </div>
+          {systemStats && (
+            <div>
+              <h3 className="font-display text-xl mb-3">Traffic on the system</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                {[
+                  ['Storage used', systemStats.storage_used],
+                  ['Documents', systemStats.total_documents],
+                  ['Logbook entries', systemStats.total_logbook_entries],
+                  ['Evaluations', systemStats.total_evaluations],
+                  ['Field visits', systemStats.total_field_visits],
+                  ['Messages', systemStats.total_messages],
+                ].map(([label, value]) => (
+                  <div key={label} className="sheet p-4">
+                    <p className="text-[0.65rem] uppercase tracking-[0.12em] text-[var(--ink-soft)]">{label}</p>
+                    <p className="font-display text-xl mt-1">{value}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {!loading && activeTab === 'institutions' && (
+        <div>
+          <PageHeader title="Institutions" actions={<button type="button" className="btn btn-primary" onClick={() => setShowInstitutionModal(true)}>Add institution</button>} />
+          <div className="sheet overflow-x-auto">
+            <table className="table-plain">
+              <thead>
+                <tr><th>Name</th><th>Domain</th><th>Contact</th><th>Status</th><th></th></tr>
+              </thead>
+              <tbody>
+                {institutions.map(inst => (
+                  <tr key={inst.id}>
+                    <td className="font-medium">{inst.name}</td>
+                    <td className="text-[var(--ink-soft)]">{inst.domain || '—'}</td>
+                    <td className="text-[var(--ink-soft)]">{inst.contact_email || '—'}</td>
+                    <td><Stamp tone={inst.is_active ? 'active' : 'closed'}>{inst.is_active ? 'Active' : 'Disabled'}</Stamp></td>
+                    <td>
+                      <button type="button" onClick={() => toggleInstitution(inst.id)} className={inst.is_active ? 'btn btn-danger text-xs py-1' : 'btn btn-primary text-xs py-1'}>
+                        {inst.is_active ? 'Disable' : 'Enable'}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {institutions.length === 0 && <tr><td colSpan={5} className="text-center text-[var(--ink-soft)]">No institutions found.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {!loading && activeTab === 'users' && (
+        <div>
+          <PageHeader title="Users" actions={<button type="button" className="btn btn-primary" onClick={() => setShowUserModal(true)}>Create user</button>} />
+          <div className="flex flex-wrap gap-2 mb-4">
+            <select value={userFilter.role} onChange={e => setUserFilter({ ...userFilter, role: e.target.value })} className="input w-auto">
+              <option value="">All roles</option>
+              <option value="student">Student</option>
+              <option value="company_supervisor">Company supervisor</option>
+              <option value="institution_supervisor">Academic supervisor</option>
+              <option value="institution_admin">Institution admin</option>
+              <option value="super_admin">Super admin</option>
+            </select>
+            <input type="text" placeholder="Search name or email" value={userFilter.search} onChange={e => setUserFilter({ ...userFilter, search: e.target.value })} className="input flex-1 min-w-40" />
+            <button type="button" onClick={fetchData} className="btn btn-ghost">Filter</button>
+          </div>
+          <div className="sheet overflow-x-auto">
+            <table className="table-plain">
+              <thead>
+                <tr><th>Name</th><th>Email</th><th>Role</th><th>Joined</th><th></th></tr>
+              </thead>
+              <tbody>
+                {(users.data || []).map(row => (
+                  <tr key={row.id}>
+                    <td className="font-medium">{row.name}</td>
+                    <td className="text-[var(--ink-soft)]">{row.email}</td>
+                    <td className="uppercase text-xs tracking-wide">{row.roles?.[0]?.name || '—'}</td>
+                    <td className="text-[var(--ink-soft)]">{new Date(row.created_at).toLocaleDateString()}</td>
+                    <td>
+                      <button type="button" onClick={() => disableUser(row.id)} className="btn btn-danger text-xs py-1">Disable</button>
+                    </td>
+                  </tr>
+                ))}
+                {(users.data || []).length === 0 && <tr><td colSpan={5} className="text-center text-[var(--ink-soft)]">No users found.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {showInstitutionModal && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-          <div className="bg-[#1E293B] rounded-xl shadow-2xl p-6 w-full max-w-md border border-gray-600">
-            <h3 className="text-xl font-bold mb-4">Add Institution</h3>
-            <form onSubmit={handleAddInstitution} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">Name *</label>
-                <input type="text" className="w-full bg-[#334155] border border-gray-600 rounded-lg px-3 py-2 text-sm text-white" value={instForm.name} onChange={e => setInstForm({...instForm, name: e.target.value})} required />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">Domain</label>
-                <input type="text" className="w-full bg-[#334155] border border-gray-600 rounded-lg px-3 py-2 text-sm text-white" value={instForm.domain} onChange={e => setInstForm({...instForm, domain: e.target.value})} placeholder="e.g. uonbi.ac.ke" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">Contact Email</label>
-                <input type="email" className="w-full bg-[#334155] border border-gray-600 rounded-lg px-3 py-2 text-sm text-white" value={instForm.contact_email} onChange={e => setInstForm({...instForm, contact_email: e.target.value})} />
-              </div>
-              <div className="flex gap-3 justify-end pt-4">
-                <button type="button" onClick={() => setShowInstitutionModal(false)} className="px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 rounded-lg">Cancel</button>
-                <button type="submit" className="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium">Add</button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <Modal title="Add institution" onClose={() => setShowInstitutionModal(false)}>
+          <form onSubmit={handleAddInstitution} className="space-y-3">
+            <label className="block text-sm">Name *<input className="input mt-1" value={instForm.name} onChange={e => setInstForm({ ...instForm, name: e.target.value })} required /></label>
+            <label className="block text-sm">Domain<input className="input mt-1" value={instForm.domain} onChange={e => setInstForm({ ...instForm, domain: e.target.value })} placeholder="e.g. uonbi.ac.ke" /></label>
+            <label className="block text-sm">Contact email<input type="email" className="input mt-1" value={instForm.contact_email} onChange={e => setInstForm({ ...instForm, contact_email: e.target.value })} /></label>
+            <div className="flex justify-end gap-2 pt-2">
+              <button type="button" className="btn btn-ghost" onClick={() => setShowInstitutionModal(false)}>Cancel</button>
+              <button type="submit" className="btn btn-primary">Add</button>
+            </div>
+          </form>
+        </Modal>
       )}
 
-      {/* ─── Create User Modal ─────────────────────────────────────────────── */}
       {showUserModal && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-          <div className="bg-[#1E293B] rounded-xl shadow-2xl p-6 w-full max-w-md border border-gray-600">
-            <h3 className="text-xl font-bold mb-4">Create User</h3>
-            <form onSubmit={handleAddUser} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">Name *</label>
-                <input type="text" className="w-full bg-[#334155] border border-gray-600 rounded-lg px-3 py-2 text-sm text-white" value={userForm.name} onChange={e => setUserForm({...userForm, name: e.target.value})} required />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">Email *</label>
-                <input type="email" className="w-full bg-[#334155] border border-gray-600 rounded-lg px-3 py-2 text-sm text-white" value={userForm.email} onChange={e => setUserForm({...userForm, email: e.target.value})} required />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">Password *</label>
-                <input type="password" className="w-full bg-[#334155] border border-gray-600 rounded-lg px-3 py-2 text-sm text-white" value={userForm.password} onChange={e => setUserForm({...userForm, password: e.target.value})} required />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">Role *</label>
-                <select className="w-full bg-[#334155] border border-gray-600 rounded-lg px-3 py-2 text-sm text-white" value={userForm.role} onChange={e => setUserForm({...userForm, role: e.target.value})}>
-                  <option value="student">Student</option>
-                  <option value="company_supervisor">Company Supervisor</option>
-                  <option value="institution_supervisor">Academic Supervisor</option>
-                  <option value="institution_admin">Institution Admin</option>
-                  <option value="super_admin">Super Admin</option>
-                </select>
-              </div>
-              <div className="flex gap-3 justify-end pt-4">
-                <button type="button" onClick={() => setShowUserModal(false)} className="px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 rounded-lg">Cancel</button>
-                <button type="submit" className="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium">Create</button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <Modal title="Create user" onClose={() => setShowUserModal(false)}>
+          <form onSubmit={handleAddUser} className="space-y-3">
+            <label className="block text-sm">Name *<input className="input mt-1" value={userForm.name} onChange={e => setUserForm({ ...userForm, name: e.target.value })} required /></label>
+            <label className="block text-sm">Email *<input type="email" className="input mt-1" value={userForm.email} onChange={e => setUserForm({ ...userForm, email: e.target.value })} required /></label>
+            <label className="block text-sm">Password *<input type="password" className="input mt-1" value={userForm.password} onChange={e => setUserForm({ ...userForm, password: e.target.value })} required /></label>
+            <label className="block text-sm">Role *
+              <select className="input mt-1" value={userForm.role} onChange={e => setUserForm({ ...userForm, role: e.target.value })}>
+                <option value="student">Student</option>
+                <option value="company_supervisor">Company supervisor</option>
+                <option value="institution_supervisor">Academic supervisor</option>
+                <option value="institution_admin">Institution admin</option>
+                <option value="super_admin">Super admin</option>
+              </select>
+            </label>
+            <div className="flex justify-end gap-2 pt-2">
+              <button type="button" className="btn btn-ghost" onClick={() => setShowUserModal(false)}>Cancel</button>
+              <button type="submit" className="btn btn-primary">Create</button>
+            </div>
+          </form>
+        </Modal>
       )}
 
-      {/* ─── Broadcast Modal ───────────────────────────────────────────────── */}
       {showBroadcastModal && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-          <div className="bg-[#1E293B] rounded-xl shadow-2xl p-6 w-full max-w-md border border-gray-600">
-            <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-              <Megaphone size={20} /> System Announcement
-            </h3>
-            <form onSubmit={handleBroadcast} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">Message *</label>
-                <textarea className="w-full bg-[#334155] border border-gray-600 rounded-lg px-3 py-2 text-sm text-white h-32 resize-none" value={broadcastMsg} onChange={e => setBroadcastMsg(e.target.value)} placeholder="Type your announcement..." required />
-              </div>
-              <p className="text-xs text-gray-400">This will send an email and in-app notification to all users.</p>
-              <div className="flex gap-3 justify-end pt-4">
-                <button type="button" onClick={() => setShowBroadcastModal(false)} className="px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 rounded-lg">Cancel</button>
-                <button type="submit" className="px-4 py-2 text-sm bg-yellow-500 hover:bg-yellow-600 text-black rounded-lg font-bold">Send Broadcast</button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <Modal title="System announcement" onClose={() => setShowBroadcastModal(false)}>
+          <form onSubmit={handleBroadcast} className="space-y-3">
+            <label className="block text-sm">
+              Message *
+              <textarea className="input mt-1 h-32 resize-none" value={broadcastMsg} onChange={e => setBroadcastMsg(e.target.value)} required />
+            </label>
+            <p className="text-xs text-[var(--ink-soft)]">Sends email and an in-app note to everyone.</p>
+            <div className="flex justify-end gap-2 pt-2">
+              <button type="button" className="btn btn-ghost" onClick={() => setShowBroadcastModal(false)}>Cancel</button>
+              <button type="submit" className="btn btn-copper">Send</button>
+            </div>
+          </form>
+        </Modal>
       )}
-    </div>
+    </AppShell>
   );
 }
