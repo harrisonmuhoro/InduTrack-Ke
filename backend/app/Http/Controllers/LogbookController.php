@@ -140,25 +140,42 @@ class LogbookController extends Controller
     /** Move a rejected entry back to draft so the student can correct and resubmit it. */
     public function resubmit(Request $request, $id)
     {
+        // Eager-load placement for the policy check; row-lock inside the transaction.
         $entry = LogbookEntry::with('placement.student')->findOrFail($id);
         $this->authorize('resubmit', $entry);
 
         DB::transaction(function () use ($entry, $request) {
+            // Row-level lock — prevents concurrent resubmit requests from creating
+            // duplicate history rows or producing inconsistent state.
+            $entry = LogbookEntry::lockForUpdate()->findOrFail($entry->id);
+
+            // Re-check authorization after acquiring the lock (double-check pattern).
+            $this->authorize('resubmit', $entry);
+
+            $actor = $request->user();
+
             LogbookReviewHistory::create([
                 'logbook_entry_id' => $entry->id,
-                'reviewer_id' => $request->user()->id,
-                'previous_status' => $entry->status,
-                'new_status' => 'draft',
-                'comment' => 'Student reopened the rejected entry for correction.',
-                'metadata' => ['ip' => $request->ip(), 'user_agent' => $request->userAgent()],
-                'reviewed_at' => now(),
+                // actor_* identifies who performed this action and in what capacity
+                'actor_id'         => $actor->id,
+                'actor_role'       => 'student',
+                'event_type'       => 'resubmit',
+                // reviewer_id stays null — this is NOT a formal academic review decision
+                'reviewer_id'      => null,
+                'previous_status'  => $entry->status,
+                'new_status'       => 'draft',
+                'comment'          => 'Student reopened the rejected entry for correction.',
+                'metadata'         => ['ip' => $request->ip(), 'user_agent' => $request->userAgent()],
+                'reviewed_at'      => now(),
             ]);
 
             $entry->update([
-                'status' => 'draft',
-                'submitted_at' => null,
-                'reviewed_by' => null,
-                'reviewed_at' => null,
+                'status'              => 'draft',
+                'submitted_at'        => null,
+                'reviewed_by'         => null,
+                'reviewed_at'         => null,
+                // Preserve correction_deadline — it still governs the edit window.
+                // The lock service will enforce it when the deadline passes.
             ]);
         });
 
@@ -246,12 +263,16 @@ class LogbookController extends Controller
             $reviewedAt = now();
             LogbookReviewHistory::create([
                 'logbook_entry_id' => $entry->id,
-                'reviewer_id' => $user->id,
-                'previous_status' => $entry->status,
-                'new_status' => $request->action,
-                'comment' => $request->comment,
-                'metadata' => ['ip' => $request->ip(), 'user_agent' => $request->userAgent()],
-                'reviewed_at' => $reviewedAt,
+                // Both reviewer_id (legacy) and actor_* (generic) are populated for formal decisions.
+                'reviewer_id'      => $user->id,
+                'actor_id'         => $user->id,
+                'actor_role'       => 'academic_supervisor',
+                'event_type'       => 'review',
+                'previous_status'  => $entry->status,
+                'new_status'       => $request->action,
+                'comment'          => $request->comment,
+                'metadata'         => ['ip' => $request->ip(), 'user_agent' => $request->userAgent()],
+                'reviewed_at'      => $reviewedAt,
             ]);
 
             $entry->update([

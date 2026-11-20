@@ -65,14 +65,16 @@ class LogbookEntry extends Model
 
     /**
      * Lock the entry with a reason.
+     * Locking only sets locked_at and lock_reason.
+     * It must NOT auto-submit a draft — submission is an explicit student action.
      */
-    public function lock(string $reason = 'Window expired (72h limit)'): void
+    public function lock(string $reason = 'Automatically locked after 72 hours'): void
     {
         $this->update([
             'locked_at'   => now(),
             'lock_reason' => $reason,
-            // If still in draft, auto-transition to submitted upon lock
-            'status'      => $this->status === 'draft' ? 'submitted' : $this->status,
+            // Status is intentionally NOT changed here. A draft stays draft.
+            // A submitted entry stays submitted. Submission requires student consent.
         ]);
     }
 }

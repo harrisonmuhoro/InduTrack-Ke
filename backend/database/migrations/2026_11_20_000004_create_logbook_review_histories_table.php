@@ -11,7 +11,7 @@ return new class extends Migration
         Schema::create('logbook_review_histories', function (Blueprint $table) {
             $table->id();
             $table->foreignId('logbook_entry_id')->constrained('logbook_entries')->cascadeOnDelete();
-            $table->foreignId('reviewer_id')->constrained('users')->restrictOnDelete();
+            $table->foreignId('reviewer_id')->nullable()->constrained('users')->restrictOnDelete();
             $table->string('previous_status');
             $table->string('new_status');
             $table->text('comment')->nullable();
