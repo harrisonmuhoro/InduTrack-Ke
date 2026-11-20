@@ -11,7 +11,10 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
-#[Fillable(['name', 'email', 'password', 'profile_photo_path', 'institution_id', 'company_id'])]
+// institution_id and company_id are included for seeder/admin assignment.
+// They are intentionally excluded from ProfileController validation rules
+// so ordinary profile requests cannot manipulate ownership fields.
+#[Fillable(['name', 'email', 'phone', 'password', 'profile_photo_path', 'institution_id', 'company_id'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable implements MustVerifyEmail
 {
@@ -83,16 +86,22 @@ class User extends Authenticatable implements MustVerifyEmail
         // Expand aliases and normalize (case-insensitive, underscore-separated)
         $checkRoles = [];
         foreach ($roles as $role) {
-            $normalized = strtolower(str_replace([' ', '-'], '_', trim($role)));
+            $normalized = self::canonicalRoleName($role);
             $checkRoles[] = $normalized;
-            if ($normalized === 'academic_supervisor' || $normalized === 'institution_supervisor') {
-                $checkRoles[] = 'academic_supervisor';
+            if ($normalized === 'academic_supervisor') {
                 $checkRoles[] = 'institution_supervisor';
             }
         }
         $checkRoles = array_unique($checkRoles);
 
         return $this->roles()->whereIn('name', $checkRoles)->exists();
+    }
+
+    public static function canonicalRoleName(?string $role): string
+    {
+        $normalized = strtolower(str_replace([' ', '-'], '_', trim((string) $role)));
+
+        return $normalized === 'institution_supervisor' ? 'academic_supervisor' : $normalized;
     }
 
     /**

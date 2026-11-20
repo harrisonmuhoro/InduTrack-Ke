@@ -64,14 +64,20 @@ class DatabaseSeeder extends Seeder
     // ─────────────────────────────────────────────────────────────
     private function seedRoles(): array
     {
+        // ── Canonical roles only ────────────────────────────────────────────────
+        // The 'institution_supervisor' role is a legacy alias for 'academic_supervisor'.
+        // New installations create ONLY the canonical 'academic_supervisor' role.
+        // Existing production databases that already contain 'institution_supervisor'
+        // entries retain them; the User::hasRole() alias layer resolves both names
+        // transparently. Do NOT seed 'institution_supervisor' here — doing so creates
+        // two independent role identities that can drift apart.
         $roleNames = [
-            'student'                => 'Student undergoing industrial attachment',
-            'company'                => 'Company manager posting slots and reviewing applicants',
-            'company_supervisor'     => 'Supervisor from the hosting company',
-            'academic_supervisor'    => 'Academic supervisor from the institution',
-            'institution_supervisor' => 'Academic supervisor from the institution (alias)',
-            'institution_admin'      => 'Administrator managing institution attachment process',
-            'super_admin'            => 'System-wide super administrator',
+            'student'             => 'Student undergoing industrial attachment',
+            'company'             => 'Company manager posting slots and reviewing applicants',
+            'company_supervisor'  => 'Supervisor from the hosting company',
+            'academic_supervisor' => 'Academic supervisor from the institution',
+            'institution_admin'   => 'Administrator managing institution attachment process',
+            'super_admin'         => 'System-wide super administrator',
         ];
 
         foreach ($roleNames as $name => $description) {
@@ -113,10 +119,11 @@ class DatabaseSeeder extends Seeder
                 'manage_institution_students', 'approve_placements', 'verify_companies',
                 'view_institution_reports'
             ],
+            // Canonical academic_supervisor — all academic workflow permissions.
+            // No separate 'institution_supervisor' entry: the User::hasRole() alias layer
+            // transparently resolves both 'academic_supervisor' and 'institution_supervisor'
+            // to the same canonical role in queries and policy checks.
             'academic_supervisor' => [
-                'review_logbook', 'grade_placement', 'conduct_field_visit', 'submit_evaluation'
-            ],
-            'institution_supervisor' => [
                 'review_logbook', 'grade_placement', 'conduct_field_visit', 'submit_evaluation'
             ],
             'company_supervisor' => [
@@ -135,10 +142,17 @@ class DatabaseSeeder extends Seeder
                 $roleId = $roles[$roleName];
                 foreach ($permNames as $pName) {
                     if (isset($perms[$pName])) {
-                        DB::table('role_permissions')->insertOrIgnore([
-                            'role_id' => $roleId,
-                            'permission_id' => $perms[$pName],
-                        ]);
+                        $permissionId = $perms[$pName];
+                        $assigned = DB::table('role_permissions')
+                            ->where('role_id', $roleId)
+                            ->where('permission_id', $permissionId)
+                            ->exists();
+                        if (! $assigned) {
+                            DB::table('role_permissions')->insert([
+                                'role_id' => $roleId,
+                                'permission_id' => $permissionId,
+                            ]);
+                        }
                     }
                 }
             }
@@ -1071,7 +1085,13 @@ class DatabaseSeeder extends Seeder
             $user->update(['institution_id' => $institutionId]);
         }
 
-        DB::table('user_roles')->insertOrIgnore(['user_id' => $user->id, 'role_id' => $roleId]);
+        $hasRole = DB::table('user_roles')
+            ->where('user_id', $user->id)
+            ->where('role_id', $roleId)
+            ->exists();
+        if (! $hasRole) {
+            DB::table('user_roles')->insert(['user_id' => $user->id, 'role_id' => $roleId]);
+        }
 
         return $user;
     }

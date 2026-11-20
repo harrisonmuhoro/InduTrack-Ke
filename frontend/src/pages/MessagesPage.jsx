@@ -78,7 +78,7 @@ export default function MessagesPage() {
   const handleGoBack = () => {
     if (role === 'student') navigate('/student');
     else if (role === 'company_supervisor') navigate('/company');
-    else if (role === 'institution_supervisor') navigate('/supervisor');
+    else if (role === 'academic_supervisor') navigate('/supervisor');
     else if (role === 'institution_admin') navigate('/institution');
     else navigate(-1);
   };

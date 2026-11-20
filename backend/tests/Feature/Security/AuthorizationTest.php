@@ -616,6 +616,6 @@ class AuthorizationTest extends TestCase
 
         // Verified company (e.g. Safaricom)
         $sfcCompany = Company::where('email', 'hr@safaricom.co.ke')->first();
-        $this->assertTrue($policy->view($student, $sfcCompany), 'Student CAN view verified partner company');
+        $this->assertFalse($policy->view($student, $sfcCompany), 'Public verification must not grant access to protected company records');
     }
 }

@@ -177,8 +177,19 @@ class InstitutionController extends Controller
 
     public function companies(Request $request)
     {
-        // Company listing is global (all verified companies available to any admin)
+        $user = $request->user();
+        $institutionId = $this->resolveInstitutionId($request);
         $query = Company::withCount(['attachmentSlots', 'ratings']);
+
+        // Institution admins can inspect companies only when an existing student
+        // workflow links that company to their institution. Super admins retain the
+        // system-wide listing.
+        if (! $user->isSuperAdmin()) {
+            $query->where(function ($q) use ($institutionId) {
+                $q->whereHas('placements.student', fn ($students) => $students->where('institution_id', $institutionId))
+                    ->orWhereHas('attachmentSlots.applications.student', fn ($students) => $students->where('institution_id', $institutionId));
+            });
+        }
 
         if ($request->search) {
             $query->where('name', 'like', '%' . $request->search . '%');

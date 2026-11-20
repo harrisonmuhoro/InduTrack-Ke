@@ -14,7 +14,11 @@ class StudentController extends Controller
 
     public function searchSlots(Request $request)
     {
-        $query = AttachmentSlot::with('company')->where('status', 'open');
+        // Company cards are a public discovery surface. Select only fields safe for
+        // display; never serialize company contact or registration details here.
+        $query = AttachmentSlot::with(['company:id,name,industry,county,address,description,website,logo_path,rating,is_verified'])
+            ->where('status', 'open')
+            ->whereHas('company', fn ($q) => $q->where('is_verified', true));
 
         if ($request->department) {
             $query->where('department', 'like', '%' . $request->department . '%');
@@ -35,7 +39,7 @@ class StudentController extends Controller
         if (!$student) return response()->json([]);
 
         return response()->json(
-            Application::with(['slot.company'])
+            Application::with(['slot.company:id,name,industry,county,address,description,website,logo_path,rating,is_verified'])
                 ->where('student_id', $student->id)
                 ->latest()
                 ->get()
@@ -65,8 +69,9 @@ class StudentController extends Controller
         $student = Student::where('user_id', $request->user()->id)->first();
         if (!$student) return response()->json([]);
 
-        $recommendedSlots = AttachmentSlot::with('company')
+        $recommendedSlots = AttachmentSlot::with(['company:id,name,industry,county,address,description,website,logo_path,rating,is_verified'])
             ->where('status', 'open')
+            ->whereHas('company', fn ($q) => $q->where('is_verified', true))
             ->where('department', 'like', '%' . ($student->department ?? '') . '%')
             ->get();
         return response()->json($recommendedSlots);

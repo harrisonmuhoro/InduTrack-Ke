@@ -8,7 +8,7 @@ import { initialsOf, fmt } from './shared';
 const ROLE_OPTIONS = [
     'student',
     'company_supervisor',
-    'institution_supervisor',
+    'academic_supervisor',
     'institution_admin',
     'super_admin',
 ];
@@ -16,7 +16,7 @@ const ROLE_OPTIONS = [
 const ROLE_LABELS = {
     student: 'Student',
     company_supervisor: 'Company Supervisor',
-    institution_supervisor: 'Institution Supervisor',
+    academic_supervisor: 'Academic Supervisor',
     institution_admin: 'Institution Admin',
     super_admin: 'Super Admin',
 };
@@ -24,7 +24,7 @@ const ROLE_LABELS = {
 const ROLE_PILL_CLASSES = {
     student: 'text-[#92400E] bg-[#FEF3C7]',
     company_supervisor: 'text-secondary bg-surface-container',
-    institution_supervisor: 'text-tertiary bg-tertiary-fixed',
+    academic_supervisor: 'text-tertiary bg-tertiary-fixed',
     institution_admin: 'text-primary bg-primary-subtle',
     super_admin: 'text-error bg-error-container',
 };

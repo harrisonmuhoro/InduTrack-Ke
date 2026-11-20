@@ -44,7 +44,7 @@ export default function ProfilePage() {
           setStudentForm({ skills, emergency_contact: ec });
         }
         if (data.company) {
-          setCompanyForm({ description: data.company.description || '', website: data.company.website || '', phone: data.company.phone || '', physical_address: data.company.physical_address || '' });
+          setCompanyForm({ description: data.company.description || '', website: data.company.website || '', phone: data.company.phone || '', physical_address: data.company.address || '' });
         }
         if (data.academic_supervisor) {
           setAcademicForm({ department: data.academic_supervisor.department || '' });
@@ -63,9 +63,15 @@ export default function ProfilePage() {
     setSaving(true);
     try {
       let payload = { ...personalForm };
-      if (role === 'Student') payload.student = studentForm;
-      if (role === 'Company') payload.company = companyForm;
-      if (role === 'Academic Supervisor') payload.academic_supervisor = academicForm;
+      if (role === 'student') payload = { ...payload, ...studentForm };
+      if (role === 'company') payload = {
+        ...payload,
+        description: companyForm.description,
+        website: companyForm.website,
+        company_phone: companyForm.phone,
+        address: companyForm.physical_address,
+      };
+      if (role === 'academic_supervisor') payload = { ...payload, ...academicForm };
 
       await api.put('/profile', payload);
       showFeedback('Profile updated successfully!');
@@ -155,7 +161,7 @@ export default function ProfilePage() {
   const getBackLink = () => {
     if (role === 'student') return '/student';
     if (role === 'company' || role === 'company_supervisor') return '/company';
-    if (role === 'institution_supervisor') return '/supervisor';
+    if (role === 'academic_supervisor') return '/supervisor';
     if (role === 'institution_admin') return '/institution';
     if (role === 'super_admin') return '/superadmin';
     return '/';
@@ -270,7 +276,7 @@ export default function ProfilePage() {
             )}
 
             {/* Company-specific fields */}
-            {(role === 'company' || role === 'company_supervisor') && (
+            {role === 'company' && (
               <>
                 <div>
                   <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-1">Company Description</label>
@@ -292,7 +298,7 @@ export default function ProfilePage() {
             )}
 
             {/* Academic Supervisor department */}
-            {role === 'institution_supervisor' && (
+            {role === 'academic_supervisor' && (
               <div>
                 <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-1">Department / Faculty</label>
                 <input type="text" value={academicForm.department} onChange={e => setAcademicForm(f => ({ ...f, department: e.target.value }))}

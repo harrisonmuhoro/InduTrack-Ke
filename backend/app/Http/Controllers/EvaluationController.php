@@ -9,7 +9,7 @@ use App\Models\CompanyRating;
 use App\Models\Company;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Database\QueryException;
 
 class EvaluationController extends Controller
 {
@@ -78,24 +78,43 @@ class EvaluationController extends Controller
                     'submitted_at'        => now(),
                 ]);
             });
-        } catch (UniqueConstraintViolationException $e) {
-            return response()->json(['message' => 'An evaluation for this evaluator type has already been submitted for this placement.'], 422);
-        } catch (\Illuminate\Database\QueryException $e) {
-            // Only translate genuine duplicate-key violations for the evaluation unique constraint
-            $message = $e->getMessage();
-            $isDuplicateEvaluation = str_contains($message, 'evaluations_placement_evaluator_type_unique')
-                || str_contains($message, 'evaluations.placement_id')
-                || (str_contains($message, 'Duplicate entry') && str_contains($message, 'evaluations'));
-
-            if ($isDuplicateEvaluation) {
-                return response()->json(['message' => 'An evaluation for this evaluator type has already been submitted for this placement.'], 422);
+        } catch (QueryException $e) {
+            if ($this->isExpectedEvaluationDuplicate($e)) {
+                return response()->json([
+                    'message'        => 'An evaluation for this evaluator type has already been submitted for this placement.',
+                    'evaluator_type' => $evaluatorType,
+                    'placement_id'   => $request->placement_id,
+                ], 409);
             }
 
-            // Re-throw genuine database failures (foreign key violations, connection issues, NOT NULL errors)
+            // Do not turn unrelated unique, foreign-key, or database failures into a
+            // duplicate response. Laravel's exception handler logs and renders them.
             throw $e;
         }
 
         return response()->json($evaluation, 201);
+    }
+
+    private function isExpectedEvaluationDuplicate(QueryException $exception): bool
+    {
+        $sqlState = (string) $exception->getCode();
+        $driverCode = (int) ($exception->errorInfo[1] ?? 0);
+        $driverMessage = (string) ($exception->errorInfo[2] ?? '');
+
+        if ($sqlState !== '23000') {
+            return false;
+        }
+
+        // MySQL names the unique index in its duplicate-key diagnostic.
+        if ($driverCode === 1062) {
+            return str_contains($driverMessage, 'evaluations_placement_evaluator_type_unique');
+        }
+
+        // SQLite reports constrained columns instead of the index name. Match the
+        // complete composite key, never a single column or generic constraint code.
+        return $driverCode === 19
+            && str_contains($driverMessage, 'evaluations.placement_id')
+            && str_contains($driverMessage, 'evaluations.evaluator_type');
     }
 
     /**

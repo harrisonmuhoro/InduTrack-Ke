@@ -41,7 +41,7 @@ class AuthController extends Controller
         $request->session()->regenerate();
 
         return response()->json([
-            'role' => $roleName,
+            'role' => User::canonicalRoleName($roleName),
             'user' => $user,
             'context' => $this->getUserContextString($user, $roleName)
         ], 201);
@@ -55,7 +55,7 @@ class AuthController extends Controller
         } elseif ($role === 'company_supervisor') {
             $sup = \App\Models\CompanySupervisor::with('company')->where('user_id', $user->id)->first();
             return $user->name . ' (' . ($sup->company->name ?? 'Unknown Company') . ')';
-        } elseif ($role === 'institution_supervisor' || $role === 'institution_admin') {
+        } elseif (User::canonicalRoleName($role) === 'academic_supervisor' || $role === 'institution_admin') {
             $sup = \App\Models\InstitutionSupervisor::with('institution')->where('user_id', $user->id)->first();
             return $user->name . ' (' . ($sup->institution->name ?? 'University of Nairobi') . ')';
         } else {
@@ -99,7 +99,7 @@ class AuthController extends Controller
         $request->session()->regenerate();
 
         return response()->json([
-            'role' => $role ?? 'student',
+            'role' => User::canonicalRoleName($role ?? 'student'),
             'user' => $user,
             'context' => $this->getUserContextString($user, $role)
         ]);
@@ -154,7 +154,7 @@ class AuthController extends Controller
             }
             
             return response()->json([
-                'role' => $role ?? 'student',
+                'role' => User::canonicalRoleName($role ?? 'student'),
                 'user' => $user,
                 'context' => $this->getUserContextString($user, $role)
             ]);
@@ -199,7 +199,7 @@ class AuthController extends Controller
 
         return response()->json([
             ...$user->toArray(),
-            'role' => $role,
+            'role' => User::canonicalRoleName($role),
             'context' => $this->getUserContextString($user, $role)
         ]);
     }

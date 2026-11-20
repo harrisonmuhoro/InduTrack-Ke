@@ -75,7 +75,7 @@ export default function LoginPage() {
 
     let route = '/student';
     if (data.role === 'company_supervisor' || data.role === 'company') route = '/company';
-    if (data.role === 'institution_supervisor') route = '/supervisor';
+    if (data.role === 'academic_supervisor') route = '/supervisor';
     if (data.role === 'institution_admin') route = '/institution';
     if (data.role === 'super_admin') route = '/superadmin';
 
