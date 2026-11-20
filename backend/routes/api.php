@@ -57,9 +57,9 @@ Route::middleware(['auth:sanctum', 'throttle:60,1'])->group(function () {
     // ── Offer Letters (Students, Companies, Admins) ───────────────────────────
     Route::get('/applications/{id}/offer',     [ApplicationController::class, 'generateOfferLetter']);
 
-    // ── Application Status Decisions (Company, Admin) ─────────────────────────
+    // ── Application Status Decisions (Company Manager, Admin) ───────────────
     Route::put('/applications/{id}/status',    [ApplicationController::class, 'updateStatus'])
-        ->middleware('role:company,company_supervisor,institution_admin,super_admin');
+        ->middleware('role:company,institution_admin,super_admin');
 
     // ── Student Role Routes ───────────────────────────────────────────────────
     Route::middleware('role:student,super_admin')->group(function () {

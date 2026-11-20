@@ -11,26 +11,30 @@ use Illuminate\Http\Request;
 class CompanyController extends Controller
 {
     /**
-     * Resolve the company for the authenticated user.
+     * Resolve the company for the authenticated user strictly based on their actual role.
      * Uses ONLY persisted database relationships — no email matching, no fallbacks.
      *
-     * - company manager: users.company_id
-     * - company supervisor: via company_supervisors table
-     * - super_admin: cannot implicitly resolve a single company (must be context-specific)
+     * - company supervisor: strictly via company_supervisors table
+     * - company manager: strictly via users.company_id
      */
     private function getCompany(Request $request): ?Company
     {
         $user = $request->user();
 
-        // Company manager: direct company_id on users table
-        if ($user->company_id) {
+        // 1. Company supervisor: strictly via assigned supervisor relationship
+        if ($user->isCompanySupervisor()) {
+            $supervisor = CompanySupervisor::where('user_id', $user->id)->first();
+            return $supervisor?->company;
+        }
+
+        // 2. Company manager: strictly via direct company_id on users table
+        if ($user->isCompany() && $user->company_id) {
             return Company::find($user->company_id);
         }
 
-        // Company supervisor: via CompanySupervisor relationship
-        $supervisor = CompanySupervisor::where('user_id', $user->id)->first();
-        if ($supervisor?->company) {
-            return $supervisor->company;
+        // 3. Fallback if user has direct company_id
+        if ($user->company_id) {
+            return Company::find($user->company_id);
         }
 
         return null;

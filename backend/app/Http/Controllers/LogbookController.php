@@ -57,15 +57,10 @@ class LogbookController extends Controller
     public function update(Request $request, $id)
     {
         $entry = LogbookEntry::with('placement.student')->findOrFail($id);
-        $user = $request->user();
 
-        // Enforce ownership: only author student can edit
-        if (!$user->isSuperAdmin() && $entry->placement?->student?->user_id !== $user->id) {
-            return response()->json(['message' => 'Forbidden. You do not own this logbook entry.'], 403);
-        }
-
-        if (!$entry->isEditable()) {
-            return response()->json(['message' => 'This logbook entry is locked and cannot be edited.'], 403);
+        // Enforce policy authorization (owner student and within editable 72h window)
+        if (Gate::denies('update', $entry)) {
+            return response()->json(['message' => 'Forbidden. You do not own this logbook entry or it is locked.'], 403);
         }
 
         $entry->update($request->only([
@@ -107,14 +102,13 @@ class LogbookController extends Controller
         $placement = $entry->placement;
         $user = $request->user();
 
-        $isStudent = ($placement->student?->user_id === $user->id);
-        $isAcademic = ($placement->academic_supervisor_id === $user->id);
-        $isCompany = ($user->companySupervisor && $placement->company_supervisor_id === $user->companySupervisor->id);
-        $isInstAdmin = ($user->isInstitutionAdmin() && $placement->student?->institution_id === $user->institution_id);
-
-        if (!$user->isSuperAdmin() && !$isStudent && !$isAcademic && !$isCompany && !$isInstAdmin) {
+        // Enforce policy authorization
+        if (Gate::denies('addComment', $entry)) {
             return response()->json(['message' => 'Forbidden. You are not authorized to comment on this logbook.'], 403);
         }
+
+        $isAcademic = ($placement->academic_supervisor_id === $user->id);
+        $isCompany = ($user->companySupervisor && $placement->company_supervisor_id === $user->companySupervisor->id);
 
         $comment = $entry->comments()->create([
             'user_id' => $user->id,
@@ -140,11 +134,8 @@ class LogbookController extends Controller
         $placement = $entry->placement;
         $user = $request->user();
 
-        // Enforce supervisor assignment check
-        $isAcademic = ($placement->academic_supervisor_id === $user->id);
-        $isCompany = ($user->companySupervisor && $placement->company_supervisor_id === $user->companySupervisor->id);
-
-        if (!$user->isSuperAdmin() && !$isAcademic && !$isCompany) {
+        // Enforce policy authorization
+        if (Gate::denies('review', $entry)) {
             return response()->json(['message' => 'Forbidden. Only assigned supervisors can review this logbook entry.'], 403);
         }
 

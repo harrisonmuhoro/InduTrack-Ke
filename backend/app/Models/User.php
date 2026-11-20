@@ -72,7 +72,7 @@ class User extends Authenticatable implements MustVerifyEmail
 
     /**
      * Check if user has a specific role (or any of the passed roles).
-     * Supports role aliases like academic_supervisor <-> institution_supervisor.
+     * Supports case-insensitivity, formatted strings, and role aliases like academic_supervisor <-> institution_supervisor.
      */
     public function hasRole(string|array $roles): bool
     {
@@ -80,14 +80,14 @@ class User extends Authenticatable implements MustVerifyEmail
             $roles = array_map('trim', explode(',', $roles));
         }
 
-        // Expand aliases
+        // Expand aliases and normalize (case-insensitive, underscore-separated)
         $checkRoles = [];
         foreach ($roles as $role) {
-            $checkRoles[] = $role;
-            if ($role === 'academic_supervisor') {
-                $checkRoles[] = 'institution_supervisor';
-            } elseif ($role === 'institution_supervisor') {
+            $normalized = strtolower(str_replace([' ', '-'], '_', trim($role)));
+            $checkRoles[] = $normalized;
+            if ($normalized === 'academic_supervisor' || $normalized === 'institution_supervisor') {
                 $checkRoles[] = 'academic_supervisor';
+                $checkRoles[] = 'institution_supervisor';
             }
         }
         $checkRoles = array_unique($checkRoles);
@@ -143,21 +143,24 @@ class User extends Authenticatable implements MustVerifyEmail
     }
 
     /**
-     * Resolve the company ID for company managers or company supervisors.
-     * Uses only persisted database relationships — never email matching.
+     * Resolve the company ID strictly according to the user's actual role.
+     * - Company supervisors strictly use their assigned supervisor relationship (company_supervisors.company_id).
+     * - Company managers strictly use their direct company assignment (users.company_id).
+     * This prevents cross-contamination when a supervisor account has an inconsistent users.company_id set.
      */
     public function getCompanyId(): ?int
     {
-        // Company manager: direct company_id on users table
-        if ($this->company_id) {
+        // 1. Company supervisor: strictly via CompanySupervisor relationship
+        if ($this->isCompanySupervisor()) {
+            return $this->companySupervisor?->company_id;
+        }
+
+        // 2. Company manager: strictly via direct company_id
+        if ($this->isCompany()) {
             return $this->company_id;
         }
 
-        // Company supervisor: via CompanySupervisor relationship
-        if ($this->companySupervisor) {
-            return $this->companySupervisor->company_id;
-        }
-
-        return null;
+        // 3. Fallback for other roles if assigned
+        return $this->company_id ?? $this->companySupervisor?->company_id;
     }
 }

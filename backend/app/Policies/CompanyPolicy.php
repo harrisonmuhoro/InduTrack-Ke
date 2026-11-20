@@ -12,7 +12,37 @@ class CompanyPolicy
      */
     public function view(User $user, Company $company): bool
     {
-        return true;
+        if ($user->isSuperAdmin()) {
+            return true;
+        }
+
+        // Company manager of this company
+        if ($user->isCompany() && $user->getCompanyId() === $company->id) {
+            return true;
+        }
+
+        // Assigned supervisor of this company
+        if ($user->isCompanySupervisor() && $user->getCompanyId() === $company->id) {
+            return true;
+        }
+
+        // Institution admin with valid institution assignment
+        if ($user->isInstitutionAdmin() && $user->institution_id) {
+            return true;
+        }
+
+        // Student with active/accepted placement or application at this company
+        if ($user->isStudent() && $user->student) {
+            $studentId = $user->student->id;
+            $hasPlacement = $company->placements()->where('student_id', $studentId)->exists();
+            $hasApp = $company->attachmentSlots()->whereHas('applications', fn($q) => $q->where('student_id', $studentId))->exists();
+            if ($hasPlacement || $hasApp) {
+                return true;
+            }
+        }
+
+        // Publicly verified partner company
+        return (bool) $company->is_verified;
     }
 
     /**

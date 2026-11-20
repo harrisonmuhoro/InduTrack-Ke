@@ -81,10 +81,16 @@ class EvaluationController extends Controller
         } catch (UniqueConstraintViolationException $e) {
             return response()->json(['message' => 'An evaluation for this evaluator type has already been submitted for this placement.'], 422);
         } catch (\Illuminate\Database\QueryException $e) {
-            // Fallback for older Laravel versions / MySQL duplicate key error code 1062
-            if ($e->getCode() == 23000 || str_contains($e->getMessage(), 'Duplicate entry')) {
+            // Only translate genuine duplicate-key violations for the evaluation unique constraint
+            $message = $e->getMessage();
+            $isDuplicateEvaluation = str_contains($message, 'evaluations_placement_evaluator_type_unique')
+                || (str_contains($message, 'Duplicate entry') && str_contains($message, 'evaluations'));
+
+            if ($isDuplicateEvaluation) {
                 return response()->json(['message' => 'An evaluation for this evaluator type has already been submitted for this placement.'], 422);
             }
+
+            // Re-throw genuine database failures (foreign key violations, connection issues, NOT NULL errors)
             throw $e;
         }
 

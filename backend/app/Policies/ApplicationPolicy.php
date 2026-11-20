@@ -36,6 +36,7 @@ class ApplicationPolicy
 
     /**
      * Determine whether the user can update the status (shortlist/accept/reject).
+     * Restricted to company managers (not company_supervisor), institution admins, and super_admin.
      */
     public function updateStatus(User $user, Application $application): bool
     {
@@ -43,9 +44,14 @@ class ApplicationPolicy
             return true;
         }
 
-        // Company owning the slot
-        if (($user->isCompany() || $user->isCompanySupervisor()) && $application->slot) {
+        // Only company manager (company_supervisor cannot change application decisions)
+        if ($user->isCompany() && $application->slot) {
             return $application->slot->company_id === $user->getCompanyId();
+        }
+
+        // Institution Admin of the student
+        if ($user->isInstitutionAdmin() && $application->student) {
+            return $application->student->institution_id === $user->institution_id;
         }
 
         return false;

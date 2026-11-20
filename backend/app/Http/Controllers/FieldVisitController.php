@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\FieldVisit;
 use App\Models\Placement;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 
 class FieldVisitController extends Controller
 {
@@ -35,8 +36,8 @@ class FieldVisitController extends Controller
         $user = $request->user();
         $placement = Placement::findOrFail($request->placement_id);
 
-        // Enforce assignment: only assigned academic supervisor or super admin
-        if (!$user->isSuperAdmin() && $placement->academic_supervisor_id !== $user->id) {
+        // Enforce policy authorization
+        if (Gate::denies('create', [FieldVisit::class, $placement])) {
             return response()->json(['message' => 'Forbidden. Only the assigned academic supervisor can schedule field visits.'], 403);
         }
 
@@ -65,7 +66,8 @@ class FieldVisitController extends Controller
         $user = $request->user();
         $visit = FieldVisit::findOrFail($id);
 
-        if (!$user->isSuperAdmin() && $visit->academic_supervisor_id !== $user->id) {
+        // Enforce policy authorization
+        if (Gate::denies('update', $visit)) {
             return response()->json(['message' => 'Forbidden. Only the conducting academic supervisor can update this report.'], 403);
         }
 
@@ -83,10 +85,8 @@ class FieldVisitController extends Controller
         $visit = FieldVisit::with('placement.student.user', 'placement.company')->findOrFail($id);
         $user = $request->user();
 
-        $isAcademic = ($visit->academic_supervisor_id === $user->id);
-        $isInstAdmin = ($user->isInstitutionAdmin() && $visit->placement?->student?->institution_id === $user->institution_id);
-
-        if (!$user->isSuperAdmin() && !$isAcademic && !$isInstAdmin) {
+        // Enforce policy authorization
+        if (Gate::denies('view', $visit)) {
             return response()->json(['message' => 'Forbidden.'], 403);
         }
 

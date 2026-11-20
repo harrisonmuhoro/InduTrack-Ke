@@ -412,4 +412,93 @@ class AuthorizationTest extends TestCase
         $this->putJson("/api/admin/companies/{$company->id}/verify")->assertStatus(403);
         $this->putJson("/api/admin/companies/{$company->id}/blacklist", ['reason' => 'test'])->assertStatus(403);
     }
+
+    /**
+     * Test 17: Company supervisor cannot update application status (restricted to company manager / admin).
+     */
+    public function test_company_supervisor_cannot_update_application_status(): void
+    {
+        $jane = User::where('email', 'jane.smith@safaricom.co.ke')->first();
+        $this->assertNotNull($jane);
+
+        // Find an application for Safaricom
+        $application = \App\Models\Application::first();
+        $this->assertNotNull($application);
+
+        Sanctum::actingAs($jane);
+        $response = $this->putJson("/api/applications/{$application->id}/status", [
+            'status' => 'shortlisted',
+        ]);
+
+        $response->assertStatus(403);
+    }
+
+    /**
+     * Test 18: Conflicting company_id on company supervisor resolves strictly to supervisor relationship.
+     */
+    public function test_company_supervisor_with_conflicting_company_id_resolves_to_supervisor_company(): void
+    {
+        $jane = User::where('email', 'jane.smith@safaricom.co.ke')->first();
+        $sfcCompany = Company::where('email', 'hr@safaricom.co.ke')->first();
+        $kcbCompany = Company::where('email', 'careers@kcbgroup.com')->first();
+
+        $this->assertNotNull($sfcCompany);
+        $this->assertNotNull($kcbCompany);
+
+        // Intentionally set an inconsistent company_id on the user record
+        $jane->update(['company_id' => $kcbCompany->id]);
+
+        // getCompanyId() must strictly resolve to Safaricom (via CompanySupervisor), not KCB
+        $this->assertEquals($sfcCompany->id, $jane->getCompanyId(), 'Supervisor must resolve to supervisor assignment even if users.company_id is set');
+
+        Sanctum::actingAs($jane);
+        $response = $this->getJson('/api/companies/slots');
+        $response->assertStatus(200);
+
+        // All returned slots must belong to Safaricom
+        foreach ($response->json() as $slot) {
+            $this->assertEquals($sfcCompany->id, $slot['company_id']);
+        }
+    }
+
+    /**
+     * Test 19: Profile retrieval uses explicit company_id relationship without email matching.
+     */
+    public function test_profile_operations_use_explicit_company_relationship_not_email(): void
+    {
+        $kcbCompany = Company::where('email', 'careers@kcbgroup.com')->first();
+
+        // Create manager user whose email does NOT match company email
+        $manager = User::factory()->create([
+            'name'              => 'KCB Custom HR',
+            'email'             => 'custom.manager@someotherdomain.com',
+            'company_id'        => $kcbCompany->id,
+            'email_verified_at' => now(),
+        ]);
+        $companyRole = Role::where('name', 'company')->first();
+        DB::table('user_roles')->insert(['user_id' => $manager->id, 'role_id' => $companyRole->id]);
+
+        Sanctum::actingAs($manager);
+        $response = $this->getJson('/api/profile');
+        $response->assertStatus(200);
+        $this->assertEquals($kcbCompany->id, $response->json('company.id'));
+    }
+
+    /**
+     * Test 20: Academic supervisor legacy alias resolves seamlessly without duplicate role assignment.
+     */
+    public function test_academic_supervisor_legacy_alias_resolves_without_dual_role_assignment(): void
+    {
+        $alan = User::where('email', 'supervisor@uonbi.ac.ke')->first();
+
+        // Only canonical academic_supervisor role assigned in DB
+        $assignedRoleCount = DB::table('user_roles')->where('user_id', $alan->id)->count();
+        $this->assertEquals(1, $assignedRoleCount, 'User should only have one canonical supervisor role row assigned');
+
+        // Alias resolution works bidirectionally
+        $this->assertTrue($alan->hasRole('academic_supervisor'));
+        $this->assertTrue($alan->hasRole('institution_supervisor'));
+        $this->assertTrue($alan->hasRole('Academic Supervisor')); // case-insensitive / formatted
+        $this->assertTrue($alan->isAcademicSupervisor());
+    }
 }

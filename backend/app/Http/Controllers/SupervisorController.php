@@ -8,6 +8,7 @@ use App\Models\Placement;
 use App\Models\WeeklyLog;
 use App\Models\StudentFlag;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 
 class SupervisorController extends Controller
 {
@@ -52,12 +53,8 @@ class SupervisorController extends Controller
             'logbookEntries.comments.user',
         ])->findOrFail($placementId);
 
-        $user = $request->user();
-        $isAcademic = ($placement->academic_supervisor_id === $user->id);
-        $isCompany = ($user->companySupervisor && $placement->company_supervisor_id === $user->companySupervisor->id);
-        $isInstAdmin = ($user->isInstitutionAdmin() && $placement->student?->institution_id === $user->institution_id);
-
-        if (!$user->isSuperAdmin() && !$isAcademic && !$isCompany && !$isInstAdmin) {
+        // Enforce policy authorization
+        if (Gate::denies('view', $placement)) {
             return response()->json(['message' => 'Forbidden. You are not assigned to supervise this placement.'], 403);
         }
 
@@ -137,13 +134,9 @@ class SupervisorController extends Controller
     public function weeklyLogs(Request $request, $placementId)
     {
         $placement = Placement::with('student')->findOrFail($placementId);
-        $user = $request->user();
 
-        $isAcademic = ($placement->academic_supervisor_id === $user->id);
-        $isCompany = ($user->companySupervisor && $placement->company_supervisor_id === $user->companySupervisor->id);
-        $isInstAdmin = ($user->isInstitutionAdmin() && $placement->student?->institution_id === $user->institution_id);
-
-        if (!$user->isSuperAdmin() && !$isAcademic && !$isCompany && !$isInstAdmin) {
+        // Enforce policy authorization
+        if (Gate::denies('view', $placement)) {
             return response()->json(['message' => 'Forbidden. Cannot view logs for unassigned placement.'], 403);
         }
 

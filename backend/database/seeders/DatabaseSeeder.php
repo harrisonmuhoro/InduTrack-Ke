@@ -247,19 +247,9 @@ class DatabaseSeeder extends Seeder
         $users['uon_admin']    = $this->createUser('Prof. James Mwangi', 'admin@uonbi.ac.ke', $roles['institution_admin'], $uonId);
         $users['strath_admin'] = $this->createUser('Dr. Grace Njeri', 'admin@strathmore.edu', $roles['institution_admin'], $strathId);
 
-        // Institution Supervisors (Academic)
-        $users['sup_alan']    = $this->createUser('Dr. Alan Odhiambo', 'supervisor@uonbi.ac.ke', $roles['academic_supervisor'] ?? $roles['institution_supervisor'], $uonId);
-        $users['sup_wanjiku'] = $this->createUser('Dr. Wanjiku Muriithi', 'wanjiku@uonbi.ac.ke', $roles['academic_supervisor'] ?? $roles['institution_supervisor'], $uonId);
-
-        // Ensure both alias roles are assigned to academic supervisors
-        if (isset($roles['institution_supervisor'])) {
-            DB::table('user_roles')->insertOrIgnore(['user_id' => $users['sup_alan']->id, 'role_id' => $roles['institution_supervisor']]);
-            DB::table('user_roles')->insertOrIgnore(['user_id' => $users['sup_wanjiku']->id, 'role_id' => $roles['institution_supervisor']]);
-        }
-        if (isset($roles['academic_supervisor'])) {
-            DB::table('user_roles')->insertOrIgnore(['user_id' => $users['sup_alan']->id, 'role_id' => $roles['academic_supervisor']]);
-            DB::table('user_roles')->insertOrIgnore(['user_id' => $users['sup_wanjiku']->id, 'role_id' => $roles['academic_supervisor']]);
-        }
+        // Academic Supervisors (Canonical role: academic_supervisor)
+        $users['sup_alan']    = $this->createUser('Dr. Alan Odhiambo', 'supervisor@uonbi.ac.ke', $roles['academic_supervisor'], $uonId);
+        $users['sup_wanjiku'] = $this->createUser('Dr. Wanjiku Muriithi', 'wanjiku@uonbi.ac.ke', $roles['academic_supervisor'], $uonId);
 
         // Link supervisors to UoN
         DB::table('institution_supervisors')->insertOrIgnore([

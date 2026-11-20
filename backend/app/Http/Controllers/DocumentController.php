@@ -6,6 +6,7 @@ use App\Models\Document;
 use App\Models\Student;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Gate;
 
 class DocumentController extends Controller
 {
@@ -54,9 +55,8 @@ class DocumentController extends Controller
     {
         $doc = Document::findOrFail($id);
 
-        // Ownership check
-        $student = Student::where('user_id', $request->user()->id)->first();
-        if (!$student || $doc->student_id !== $student->id) {
+        // Enforce policy authorization
+        if (Gate::denies('download', $doc)) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
@@ -76,6 +76,12 @@ class DocumentController extends Controller
         ]);
 
         $doc = Document::findOrFail($id);
+
+        // Enforce policy authorization
+        if (Gate::denies('review', $doc)) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+
         $doc->update([
             'status'           => $request->status,
             'rejection_reason' => $request->rejection_reason,
