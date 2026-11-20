@@ -417,8 +417,13 @@ class AuthorizationTest extends TestCase
         // First submission should succeed
         $this->postJson('/api/evaluations', $payload)->assertStatus(201);
 
-        // Second submission (same type for same placement) must be rejected
-        $this->postJson('/api/evaluations', $payload)->assertStatus(422);
+        // Second submission (same type for same placement) conflicts with the
+        // database's named composite unique constraint.
+        $this->postJson('/api/evaluations', $payload)
+            ->assertStatus(409)
+            ->assertJsonPath('message', 'An evaluation for this evaluator type has already been submitted for this placement.')
+            ->assertJsonPath('evaluator_type', 'company_supervisor')
+            ->assertJsonPath('placement_id', $johnPlacement->id);
     }
 
     /**

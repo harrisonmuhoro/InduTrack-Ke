@@ -729,9 +729,8 @@ class SecurityRemediationTest extends TestCase
 
         // John can download his own
         Sanctum::actingAs($john);
-        // Will 404 on actual file not existing, but authorization passes (not 403)
-        $response = $this->getJson("/api/documents/{$doc->id}/download");
-        $this->assertNotEquals(403, $response->getStatusCode(), 'John must be authorized to download his own document');
+        // Authorization passes and the missing test file produces the exact 404.
+        $this->getJson("/api/documents/{$doc->id}/download")->assertNotFound();
     }
 
     /**
@@ -744,6 +743,7 @@ class SecurityRemediationTest extends TestCase
         // John is a UoN student
         $john        = User::where('email', 'john.doe@student.uonbi.ac.ke')->first();
         $johnStudent = \App\Models\Student::where('user_id', $john->id)->first();
+        Storage::fake('local');
 
         $doc = \App\Models\Document::create([
             'student_id'    => $johnStudent->id,
@@ -755,9 +755,35 @@ class SecurityRemediationTest extends TestCase
             'status'        => 'pending',
         ]);
 
+        Storage::disk('local')->put($doc->file_path, 'test document');
+        $uonAdmin = User::where('email', 'admin@uonbi.ac.ke')->first();
+        Sanctum::actingAs($uonAdmin);
+        $this->get("/api/documents/{$doc->id}/download")->assertOk();
+
         // Strathmore admin trying to download UoN student's document
         Sanctum::actingAs($strathAdmin);
         $this->getJson("/api/documents/{$doc->id}/download")->assertStatus(403);
+        Storage::disk('local')->delete($doc->file_path);
+    }
+
+    public function test_document_upload_removes_file_when_database_insert_fails(): void
+    {
+        $john = User::where('email', 'john.doe@student.uonbi.ac.ke')->firstOrFail();
+        Sanctum::actingAs($john);
+        Storage::fake('local');
+
+        \App\Models\Document::creating(function () {
+            throw new \RuntimeException('Simulated document persistence failure.');
+        });
+
+        $response = $this->postJson('/api/documents', [
+            'type' => 'cv',
+            'file' => UploadedFile::fake()->create('cv.pdf', 100, 'application/pdf'),
+        ]);
+
+        $response->assertServerError();
+        $this->assertSame([], Storage::disk('local')->allFiles());
+        $this->assertDatabaseMissing('documents', ['original_name' => 'cv.pdf']);
     }
 
     /**

@@ -1,0 +1,38 @@
+name: Backend tests
+
+on:
+  push:
+    branches: [main, "codex/**"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  laravel-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          tools: composer:v2
+          extensions: curl, fileinfo, gd, mbstring, openssl, pdo_sqlite, sqlite3, xml
+          coverage: none
+
+      - name: Validate Composer configuration
+        run: composer validate --strict
+
+      - name: Install backend dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Prepare application environment
+        run: |
+          cp .env.example .env
+          php artisan key:generate --force
+
+      - name: Run backend test suite
+        run: php artisan test

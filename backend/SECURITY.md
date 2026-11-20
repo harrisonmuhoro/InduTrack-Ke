@@ -39,6 +39,32 @@ has been explicitly resolved. Do not select a winner based only on an ID or time
 Rolling the migration back removes the unique index and does not modify or restore
 evaluation rows.
 
+### Recovery when the earlier destructive migration already ran
+
+Do not rerun or edit the migration ledger manually as a recovery action. Before any
+repair:
+
+1. Pause deployment and take a verified, restorable backup of the whole database.
+2. Check the `migrations` row for `2026_07_17_000001_add_unique_constraint_to_evaluations_table`.
+3. If it is recorded as applied, preserve a separate read-only export of both
+   `evaluations_archive` and `evaluations`, including every archive snapshot and its
+   original ID. Record active/archive counts and duplicate keys before changing data.
+4. Build a reconciliation worksheet for every archived row containing its original ID,
+   placement, evaluator ID/type, submission metadata, corresponding active row (if any),
+   decision maker, date, reason, and approval reference. Compare the full archived
+   snapshot with the active evaluation and supporting workflow records.
+5. Have an authorized academic/placement owner approve each restore or retention
+   decision. Restore only rows explicitly approved and only after confirming they do
+   not conflict with the composite unique key. Preserve unresolved records in the
+   archive; do not auto-select or overwrite an active evaluation.
+6. Reconcile on a disposable restored copy first. Validate row counts, foreign keys,
+   snapshots, and the unique index before applying the recorded plan to production.
+   Retain the backup, worksheet, approvals, and execution log as the audit trail.
+
+If the archive table is missing, incomplete, or the old migration status is uncertain,
+stop and recover from a verified backup with the database owner. The revised migration
+does not reconstruct records removed by an earlier run.
+
 ## Authorization coverage matrix
 
 | Endpoint/action | Role scope | Runtime enforcement | Coverage / limitation |
@@ -48,7 +74,7 @@ evaluation rows.
 | `POST /companies/slots` | Assigned company manager | Role middleware and `CompanyPolicy::createSlot` | Company supervisor denied; authorization regression test |
 | `PUT /applications/{id}/status` | Owning company manager, same-institution admin, super admin | Role middleware and `ApplicationPolicy::updateStatus` | Authorization tests; decision policy checks slot/student relationship |
 | `GET /applications/{id}/offer` | Application student, owning company, same-institution admin, super admin | `ApplicationPolicy::generateOffer` | Authorization tests |
-| `GET /documents/{id}/download` | Document student, same-institution admin, super admin | `DocumentPolicy::download` through Gate | Cross-tenant download tests required; route is under student role middleware |
+| `GET /documents/{id}/download` | Document student, same-institution admin, super admin | Authenticated route; `DocumentPolicy::download` through Gate | Student and cross-institution tests plus same-institution download test |
 | `PUT /admin/documents/{id}/review` | Same-institution admin or super admin | Institution route middleware and explicit institution ownership check | Controller boundary check |
 | `GET/POST/PUT /field-visits` | Assigned academic supervisor, same-institution admin for view, super admin | Role middleware and `FieldVisitPolicy` | Assigned-supervisor policy coverage; company supervisors excluded from routes |
 | `POST /evaluations` | Assigned academic/company supervisor, super admin | Supervisor role middleware and assignment/status checks in controller | Duplicate and unrelated DB exception integration cases remain driver-dependent |
@@ -56,6 +82,8 @@ evaluation rows.
 | `GET /admin/companies` | Connected institution admin; super admin | Institution relationship query | Tenant filter added; API integration test required |
 | `PUT /admin/companies/{id}/verify|blacklist` | Super admin | Explicit role check in controller | Institution admins denied |
 | Profile mutation/upload routes | Authenticated user's own profile and related entity | Ownership resolved before validation/storage; validated fields only; DB transaction / file cleanup | Atomicity and upload failure tests required |
+| `POST /auth/2fa/setup`, `/auth/2fa/verify` | Authenticated enrollee or short-lived password-verified pending session | Throttled routes; pending session is not logged in; OTP required before completing login/enabling 2FA | Feature tests cover pending login, enrollment repair, secret serialization, and unauthenticated rejection |
+| `POST /auth/2fa/toggle` | Authenticated account owner, disable only | Current password and OTP required to disable; enabling uses setup then OTP verification | Disable path test required |
 
 Registered policies also cover applications, placements, logbook entries, evaluations,
 field visits, institutions, documents, students, and companies. A registered policy is

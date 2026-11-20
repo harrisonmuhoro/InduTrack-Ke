@@ -15,7 +15,7 @@ use Laravel\Sanctum\HasApiTokens;
 // They are intentionally excluded from ProfileController validation rules
 // so ordinary profile requests cannot manipulate ownership fields.
 #[Fillable(['name', 'email', 'phone', 'password', 'profile_photo_path', 'institution_id', 'company_id'])]
-#[Hidden(['password', 'remember_token'])]
+#[Hidden(['password', 'remember_token', 'google2fa_secret'])]
 class User extends Authenticatable implements MustVerifyEmail
 {
     /** @use HasFactory<UserFactory> */

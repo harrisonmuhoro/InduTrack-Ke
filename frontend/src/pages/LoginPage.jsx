@@ -18,7 +18,6 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [step, setStep] = useState(1);
   const [otp, setOtp] = useState('');
-  const [tempToken, setTempToken] = useState('');
   const [setupRequired, setSetupRequired] = useState(false);
   const [qrCodeSvg, setQrCodeSvg] = useState('');
   const [secret, setSecret] = useState('');
@@ -37,14 +36,11 @@ export default function LoginPage() {
       const res = await api.post('/auth/login', { email, password });
 
       if (res.data['2fa_required']) {
-        setTempToken(res.data.temp_token);
         setSetupRequired(res.data.setup_required);
         setStep(2);
 
         if (res.data.setup_required) {
-          const setupRes = await api.post('/auth/2fa/setup', {}, {
-            headers: { Authorization: `Bearer ${res.data.temp_token}` }
-          });
+          const setupRes = await api.post('/auth/2fa/setup');
           setQrCodeSvg(setupRes.data.qr_code_svg);
           setSecret(setupRes.data.secret);
         }
@@ -61,9 +57,7 @@ export default function LoginPage() {
     e.preventDefault();
     setError('');
     try {
-      const res = await api.post('/auth/2fa/verify', { otp }, {
-        headers: { Authorization: `Bearer ${tempToken}` }
-      });
+      const res = await api.post('/auth/2fa/verify', { otp });
       finishLogin(res.data);
     } catch (err) {
       setError(err.response?.data?.message || 'Invalid OTP.');
