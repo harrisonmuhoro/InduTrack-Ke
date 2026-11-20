@@ -27,8 +27,10 @@ stitch_indutrack_ke_dashboard_ui (3)/
 # Internal architecture/design docs
 InduTrack-KE-Portal-System.md
 InduTrack-KE-Profile-Edit-Permissions.md
+INDUTRACK-KE-ROADMAP.md
 
 # Frontend/Backend build artifacts
 frontend/dist/
 frontend/build/
 backend/bootstrap/cache/*.php
+
