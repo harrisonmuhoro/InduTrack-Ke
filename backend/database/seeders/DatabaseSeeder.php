@@ -66,8 +66,10 @@ class DatabaseSeeder extends Seeder
     {
         $roleNames = [
             'student'                => 'Student undergoing industrial attachment',
+            'company'                => 'Company manager posting slots and reviewing applicants',
             'company_supervisor'     => 'Supervisor from the hosting company',
-            'institution_supervisor' => 'Academic supervisor from the institution',
+            'academic_supervisor'    => 'Academic supervisor from the institution',
+            'institution_supervisor' => 'Academic supervisor from the institution (alias)',
             'institution_admin'      => 'Administrator managing institution attachment process',
             'super_admin'            => 'System-wide super administrator',
         ];
@@ -76,7 +78,73 @@ class DatabaseSeeder extends Seeder
             DB::table('roles')->insertOrIgnore(['name' => $name, 'description' => $description, 'created_at' => now(), 'updated_at' => now()]);
         }
 
-        return DB::table('roles')->pluck('id', 'name')->toArray();
+        $roles = DB::table('roles')->pluck('id', 'name')->toArray();
+
+        // 1b. Seed Permissions
+        $permissionDefs = [
+            'manage_institutions'        => 'Create, edit, toggle institutions',
+            'manage_all_users'           => 'Manage system users and assign roles',
+            'view_audit_logs'            => 'View system audit logs',
+            'manage_institution_students'=> 'Manage student records within institution',
+            'approve_placements'         => 'Approve or reject student placements',
+            'verify_companies'           => 'Verify and blacklist partner companies',
+            'view_institution_reports'   => 'View analytics and export reports',
+            'post_slots'                 => 'Post and manage attachment slots',
+            'manage_company_applications'=> 'Shortlist, accept, or reject applicants',
+            'submit_logbook'             => 'Submit weekly logbook entries',
+            'review_logbook'             => 'Review and comment on logbook entries',
+            'grade_placement'            => 'Submit academic grades for placements',
+            'conduct_field_visit'        => 'Schedule and submit field visit reports',
+            'submit_company_log'         => 'Submit weekly supervisor performance logs',
+            'submit_evaluation'          => 'Submit final placement evaluations',
+            'rate_company'               => 'Submit company rating and review',
+        ];
+
+        foreach ($permissionDefs as $name => $description) {
+            DB::table('permissions')->insertOrIgnore(['name' => $name, 'description' => $description, 'created_at' => now(), 'updated_at' => now()]);
+        }
+
+        $perms = DB::table('permissions')->pluck('id', 'name')->toArray();
+
+        // Map Permissions to Roles
+        $rolePermissions = [
+            'super_admin' => array_keys($permissionDefs),
+            'institution_admin' => [
+                'manage_institution_students', 'approve_placements', 'verify_companies',
+                'view_institution_reports'
+            ],
+            'academic_supervisor' => [
+                'review_logbook', 'grade_placement', 'conduct_field_visit', 'submit_evaluation'
+            ],
+            'institution_supervisor' => [
+                'review_logbook', 'grade_placement', 'conduct_field_visit', 'submit_evaluation'
+            ],
+            'company_supervisor' => [
+                'submit_company_log', 'review_logbook', 'submit_evaluation'
+            ],
+            'company' => [
+                'post_slots', 'manage_company_applications'
+            ],
+            'student' => [
+                'submit_logbook', 'rate_company'
+            ],
+        ];
+
+        foreach ($rolePermissions as $roleName => $permNames) {
+            if (isset($roles[$roleName])) {
+                $roleId = $roles[$roleName];
+                foreach ($permNames as $pName) {
+                    if (isset($perms[$pName])) {
+                        DB::table('role_permissions')->insertOrIgnore([
+                            'role_id' => $roleId,
+                            'permission_id' => $perms[$pName],
+                        ]);
+                    }
+                }
+            }
+        }
+
+        return $roles;
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -174,19 +242,36 @@ class DatabaseSeeder extends Seeder
         $users['superadmin'] = $this->createUser('System Super Admin', 'superadmin@indutrack.ke', $roles['super_admin']);
 
         // Institution Admins
-        $users['uon_admin']    = $this->createUser('Prof. James Mwangi', 'admin@uonbi.ac.ke', $roles['institution_admin']);
-        $users['strath_admin'] = $this->createUser('Dr. Grace Njeri', 'admin@strathmore.edu', $roles['institution_admin']);
+        $uonId = $institutions['uonbi.ac.ke'];
+        $strathId = $institutions['strathmore.edu'];
+        $users['uon_admin']    = $this->createUser('Prof. James Mwangi', 'admin@uonbi.ac.ke', $roles['institution_admin'], $uonId);
+        $users['strath_admin'] = $this->createUser('Dr. Grace Njeri', 'admin@strathmore.edu', $roles['institution_admin'], $strathId);
 
         // Institution Supervisors (Academic)
-        $users['sup_alan']   = $this->createUser('Dr. Alan Odhiambo', 'supervisor@uonbi.ac.ke', $roles['institution_supervisor']);
-        $users['sup_wanjiku'] = $this->createUser('Dr. Wanjiku Muriithi', 'wanjiku@uonbi.ac.ke', $roles['institution_supervisor']);
+        $users['sup_alan']    = $this->createUser('Dr. Alan Odhiambo', 'supervisor@uonbi.ac.ke', $roles['academic_supervisor'] ?? $roles['institution_supervisor'], $uonId);
+        $users['sup_wanjiku'] = $this->createUser('Dr. Wanjiku Muriithi', 'wanjiku@uonbi.ac.ke', $roles['academic_supervisor'] ?? $roles['institution_supervisor'], $uonId);
+
+        // Ensure both alias roles are assigned to academic supervisors
+        if (isset($roles['institution_supervisor'])) {
+            DB::table('user_roles')->insertOrIgnore(['user_id' => $users['sup_alan']->id, 'role_id' => $roles['institution_supervisor']]);
+            DB::table('user_roles')->insertOrIgnore(['user_id' => $users['sup_wanjiku']->id, 'role_id' => $roles['institution_supervisor']]);
+        }
+        if (isset($roles['academic_supervisor'])) {
+            DB::table('user_roles')->insertOrIgnore(['user_id' => $users['sup_alan']->id, 'role_id' => $roles['academic_supervisor']]);
+            DB::table('user_roles')->insertOrIgnore(['user_id' => $users['sup_wanjiku']->id, 'role_id' => $roles['academic_supervisor']]);
+        }
 
         // Link supervisors to UoN
-        $uonId = $institutions['uonbi.ac.ke'];
         DB::table('institution_supervisors')->insertOrIgnore([
             ['user_id' => $users['sup_alan']->id,   'institution_id' => $uonId, 'department' => 'Computer Science', 'created_at' => now(), 'updated_at' => now()],
             ['user_id' => $users['sup_wanjiku']->id, 'institution_id' => $uonId, 'department' => 'Information Technology', 'created_at' => now(), 'updated_at' => now()],
         ]);
+
+        // Company Managers (Role: company)
+        if (isset($roles['company'])) {
+            $users['safaricom_company'] = $this->createUser('Safaricom HR', 'hr@safaricom.co.ke', $roles['company']);
+            $users['default_company']   = $this->createUser('Company Admin', 'company@example.com', $roles['company']);
+        }
 
         // Company Supervisors
         $users['jane_safaricom'] = $this->createUser('Jane Smith', 'jane.smith@safaricom.co.ke', $roles['company_supervisor']);
@@ -311,35 +396,35 @@ class DatabaseSeeder extends Seeder
         $placements = [];
 
         // ── Student 1: John Doe — ACTIVE at Safaricom (week 10 of 16) ──────────
-        $john = $this->createUser('John Mwangi Doe', 'john.doe@student.uonbi.ac.ke', $roles['student']);
+        $john = $this->createUser('John Mwangi Doe', 'john.doe@student.uonbi.ac.ke', $roles['student'], $uonId);
         $johnStudent = $this->createStudent($john->id, $uonId, 'P15/1234/2022', 'Computer Science', 'BSc. Computer Science', '3rd Year', 'PHP, JavaScript, Laravel, React, Git, MySQL');
         $this->createApplication($johnStudent->id, $slots[0]['id'], 'accepted', 'I am passionate about building scalable systems and eager to contribute to Safaricom\'s engineering goals.');
         $p1 = $this->createPlacement($johnStudent->id, $sfcId, $periodUon, $sfcSupId, $alanId, 'active');
         $placements['john_active'] = ['placement' => $p1, 'student_user' => $john, 'sup_user' => $users['jane_safaricom'], 'acad_user' => $users['sup_alan']];
 
         // ── Student 2: Alice Wanjiru — ACTIVE at KCB (week 8 of 16) ─────────────
-        $alice = $this->createUser('Alice Wanjiru Kamau', 'alice.wanjiru@student.uonbi.ac.ke', $roles['student']);
+        $alice = $this->createUser('Alice Wanjiru Kamau', 'alice.wanjiru@student.uonbi.ac.ke', $roles['student'], $uonId);
         $aliceStudent = $this->createStudent($alice->id, $uonId, 'P15/5678/2022', 'Information Technology', 'BSc. Information Technology', '3rd Year', 'Networking, Linux, Python, Cloud Computing, CCNA');
         $this->createApplication($aliceStudent->id, $slots[3]['id'], 'accepted', 'Networking and cloud infrastructure have been my passion since first year.');
         $p2 = $this->createPlacement($aliceStudent->id, $kcbId, $periodUon, $kcbSupId, $alanId, 'active');
         $placements['alice_active'] = ['placement' => $p2, 'student_user' => $alice, 'sup_user' => $users['mark_kcb'], 'acad_user' => $users['sup_alan']];
 
         // ── Student 3: Brian Otieno — COMPLETED at Equity (evaluated) ────────────
-        $brian = $this->createUser('Brian Otieno Ouma', 'brian.otieno@student.uonbi.ac.ke', $roles['student']);
+        $brian = $this->createUser('Brian Otieno Ouma', 'brian.otieno@student.uonbi.ac.ke', $roles['student'], $uonId);
         $brianStudent = $this->createStudent($brian->id, $uonId, 'P15/9012/2021', 'Computer Science', 'BSc. Computer Science', '4th Year', 'Flutter, Dart, Firebase, Mobile Development, REST APIs');
         $this->createApplication($brianStudent->id, $slots[5]['id'], 'accepted', 'Mobile development is my specialty and I\'d love to contribute to Equity\'s digital transformation.');
         $p3 = $this->createPlacement($brianStudent->id, $equityId, $periodUon, $equitySupId, $wanjikuId, 'completed', 88.50);
         $placements['brian_completed'] = ['placement' => $p3, 'student_user' => $brian, 'sup_user' => $users['peter_equity'], 'acad_user' => $users['sup_wanjiku']];
 
         // ── Student 4: Carol Muthoni — FLAGGED at Safaricom ──────────────────────
-        $carol = $this->createUser('Carol Muthoni Njagi', 'carol.muthoni@student.uonbi.ac.ke', $roles['student']);
+        $carol = $this->createUser('Carol Muthoni Njagi', 'carol.muthoni@student.uonbi.ac.ke', $roles['student'], $uonId);
         $carolStudent = $this->createStudent($carol->id, $uonId, 'P15/3456/2022', 'Computer Science', 'BSc. Computer Science', '3rd Year', 'Java, HTML, CSS, Basic Python');
         $this->createApplication($carolStudent->id, $slots[2]['id'], 'accepted', 'I am committed to learning cybersecurity from the ground up.');
         $p4 = $this->createPlacement($carolStudent->id, $sfcId, $periodUon, $sfcSupId, $alanId, 'flagged');
         $placements['carol_flagged'] = ['placement' => $p4, 'student_user' => $carol, 'sup_user' => $users['jane_safaricom'], 'acad_user' => $users['sup_alan']];
 
         // ── Student 5: David Kamau — PENDING / Applied at KPLC (not yet placed) ─
-        $david = $this->createUser('David Kamau Njoroge', 'david.kamau@student.strathmore.edu', $roles['student']);
+        $david = $this->createUser('David Kamau Njoroge', 'david.kamau@student.strathmore.edu', $roles['student'], $strathId);
         $davidStudent = $this->createStudent($david->id, $strathId, 'STR/ICT/2022/034', 'ICT', 'BSc. Information Technology', '3rd Year', 'Oracle, Networking, Windows Server');
         $this->createApplication($davidStudent->id, $slots[6]['id'], 'submitted', 'I have strong Oracle skills and would love to support KPLC\'s ERP systems.');
         // David applied but no placement yet — also applied to KCB (shortlisted)
@@ -347,7 +432,7 @@ class DatabaseSeeder extends Seeder
         $placements['david_pending'] = null;
 
         // ── Student 6: Emily Achieng — DRAFT application (not submitted) ─────────
-        $emily = $this->createUser('Emily Achieng Onyango', 'emily.achieng@student.strathmore.edu', $roles['student']);
+        $emily = $this->createUser('Emily Achieng Onyango', 'emily.achieng@student.strathmore.edu', $roles['student'], $strathId);
         $emilyStudent = $this->createStudent($emily->id, $strathId, 'STR/CS/2022/078', 'Computer Science', 'BSc. Computer Science', '3rd Year', 'Python, Django, React, PostgreSQL');
         $this->createApplication($emilyStudent->id, $slots[1]['id'], 'draft', null);
         $placements['emily_draft'] = null;

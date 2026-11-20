@@ -5,6 +5,7 @@
 
 # Dependencies
 /vendor
+/node_modules
 
 # Laravel generated
 /bootstrap/cache/*.php

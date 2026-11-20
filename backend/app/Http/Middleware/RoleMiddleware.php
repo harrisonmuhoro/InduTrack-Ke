@@ -15,16 +15,27 @@ class RoleMiddleware
      */
     public function handle(Request $request, Closure $next, ...$roles): Response
     {
-        if (!$request->user()) {
-            return response()->json(['message' => 'Unauthenticated'], 401);
+        $user = $request->user();
+
+        if (!$user) {
+            return response()->json(['message' => 'Unauthenticated.'], 401);
         }
 
+        // Support both spread args and comma-separated strings (e.g. 'role:institution_admin,super_admin')
+        $parsedRoles = [];
         foreach ($roles as $role) {
-            if ($request->user()->hasRole($role)) {
-                return $next($request);
+            foreach (explode(',', $role) as $r) {
+                $r = trim($r);
+                if ($r !== '') {
+                    $parsedRoles[] = $r;
+                }
             }
         }
 
-        return response()->json(['message' => 'Forbidden'], 403);
+        if ($user->hasRole($parsedRoles)) {
+            return $next($request);
+        }
+
+        return response()->json(['message' => 'Forbidden. Insufficient role permissions.'], 403);
     }
 }
