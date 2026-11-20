@@ -4,7 +4,6 @@ title InduTrack KE - Unified Launcher
 
 :: =====================================================================
 :: InduTrack KE - Unified Multi-Service Master Launcher
-:: Combines Backend, Frontend, Queue Worker, Scheduler, and Utilities
 :: =====================================================================
 
 set "ROOT_DIR=%~dp0"
@@ -23,14 +22,15 @@ if exist "D:\wamp64\bin\php\php8.3.28\php.exe" (
 :: Resolve NPM Binary
 set "NPM_BIN=npm.cmd"
 
-:: Check CLI Arguments for Direct Subcommand Execution
-if /i "%~1"=="backend"   goto :run_backend
-if /i "%~1"=="frontend"  goto :run_frontend
-if /i "%~1"=="queue"     goto :run_queue
-if /i "%~1"=="scheduler" goto :run_scheduler
+:: -----------------------------------------------------------------------
+:: Each service window runs its command INLINE via cmd /k so this script
+:: does NOT need to re-invoke itself with a label argument. This avoids the
+:: "batch label not found" error that occurs when cmd restarts the script
+:: with setlocal and cannot locate labels defined after the first goto chain.
+:: -----------------------------------------------------------------------
+
+:: CLI shortcut arguments (used by other tools, not by child windows)
 if /i "%~1"=="migrate"   goto :run_migrate
-if /i "%~1"=="core"      goto :launch_core
-if /i "%~1"=="all"       goto :launch_all
 if /i "%~1"=="build"     goto :run_build
 
 :: -------------------------------------------------------------
@@ -82,40 +82,40 @@ goto :menu
 
 
 :: -------------------------------------------------------------
-:: Launcher Routines (opens separate Windows)
+:: Launcher Routines - open dedicated windows with INLINE commands
 :: -------------------------------------------------------------
 :launch_core
 echo.
 echo [*] Launching Core Services (Backend + Frontend)...
-start "InduTrack KE - Backend Server" cmd /k ""%~f0" backend"
-start "InduTrack KE - Frontend Server" cmd /k ""%~f0" frontend"
+start "InduTrack KE - Backend Server"   cmd /k "title InduTrack KE - Backend Server && cd /d "%BACKEND_DIR%" && echo. && echo  Laravel Backend - http://localhost:8000 && echo. && "%PHP_BIN%" artisan serve --host=127.0.0.1 --port=8000"
+start "InduTrack KE - Frontend Server"  cmd /k "title InduTrack KE - Frontend Server && cd /d "%FRONTEND_DIR%" && echo. && echo  Vite Frontend - http://localhost:5173 && echo. && npm.cmd run dev"
 echo [OK] Backend and Frontend launched in dedicated windows.
 goto :after_launch
 
 :launch_all
 echo.
 echo [*] Launching All 4 Services (Backend, Frontend, Queue, Scheduler)...
-start "InduTrack KE - Backend Server" cmd /k ""%~f0" backend"
-start "InduTrack KE - Frontend Server" cmd /k ""%~f0" frontend"
-start "InduTrack KE - Queue Worker" cmd /k ""%~f0" queue"
-start "InduTrack KE - Scheduler" cmd /k ""%~f0" scheduler"
+start "InduTrack KE - Backend Server"   cmd /k "title InduTrack KE - Backend Server && cd /d "%BACKEND_DIR%" && echo. && echo  Laravel Backend - http://localhost:8000 && echo. && "%PHP_BIN%" artisan serve --host=127.0.0.1 --port=8000"
+start "InduTrack KE - Frontend Server"  cmd /k "title InduTrack KE - Frontend Server && cd /d "%FRONTEND_DIR%" && echo. && echo  Vite Frontend - http://localhost:5173 && echo. && npm.cmd run dev"
+start "InduTrack KE - Queue Worker"     cmd /k "title InduTrack KE - Queue Worker && cd /d "%BACKEND_DIR%" && echo. && echo  Queue Worker - artisan queue:work --tries=3 && echo. && "%PHP_BIN%" artisan queue:work --tries=3"
+start "InduTrack KE - Scheduler"        cmd /k "title InduTrack KE - Scheduler && cd /d "%BACKEND_DIR%" && echo. && echo  Scheduler - artisan schedule:work && echo. && "%PHP_BIN%" artisan schedule:work"
 echo [OK] All services launched in dedicated windows.
 goto :after_launch
 
 :launch_backend_win
-start "InduTrack KE - Backend Server" cmd /k ""%~f0" backend"
+start "InduTrack KE - Backend Server"   cmd /k "title InduTrack KE - Backend Server && cd /d "%BACKEND_DIR%" && echo. && echo  Laravel Backend - http://localhost:8000 && echo. && "%PHP_BIN%" artisan serve --host=127.0.0.1 --port=8000"
 goto :after_launch
 
 :launch_frontend_win
-start "InduTrack KE - Frontend Server" cmd /k ""%~f0" frontend"
+start "InduTrack KE - Frontend Server"  cmd /k "title InduTrack KE - Frontend Server && cd /d "%FRONTEND_DIR%" && echo. && echo  Vite Frontend - http://localhost:5173 && echo. && npm.cmd run dev"
 goto :after_launch
 
 :launch_queue_win
-start "InduTrack KE - Queue Worker" cmd /k ""%~f0" queue"
+start "InduTrack KE - Queue Worker"     cmd /k "title InduTrack KE - Queue Worker && cd /d "%BACKEND_DIR%" && echo. && echo  Queue Worker - artisan queue:work --tries=3 && echo. && "%PHP_BIN%" artisan queue:work --tries=3"
 goto :after_launch
 
 :launch_scheduler_win
-start "InduTrack KE - Scheduler" cmd /k ""%~f0" scheduler"
+start "InduTrack KE - Scheduler"        cmd /k "title InduTrack KE - Scheduler && cd /d "%BACKEND_DIR%" && echo. && echo  Scheduler - artisan schedule:work && echo. && "%PHP_BIN%" artisan schedule:work"
 goto :after_launch
 
 :after_launch
@@ -125,95 +125,32 @@ echo  Backend:   http://localhost:8000
 echo  Frontend:  http://localhost:5173
 echo ---------------------------------------------------------------------
 echo.
-if not "%~1"=="" exit /b 0
 pause
 goto :menu
 
 
 :: -------------------------------------------------------------
-:: Direct Service Execution Handlers
+:: Utility Handlers (run inline in this window)
 :: -------------------------------------------------------------
-:run_backend
-title InduTrack KE - Backend Server [Port 8000]
-echo =====================================================================
-echo    InduTrack KE - Laravel Backend Server
-echo =====================================================================
-echo Directory: %BACKEND_DIR%
-echo URL:       http://localhost:8000
-echo.
-cd /d "%BACKEND_DIR%"
-"%PHP_BIN%" artisan serve --host=127.0.0.1 --port=8000
-echo.
-echo [*] Backend server process terminated.
-pause
-exit /b 0
-
-:run_frontend
-title InduTrack KE - Frontend Dev Server [Port 5173]
-echo =====================================================================
-echo    InduTrack KE - React Vite Frontend Server
-echo =====================================================================
-echo Directory: %FRONTEND_DIR%
-echo URL:       http://localhost:5173
-echo.
-cd /d "%FRONTEND_DIR%"
-call %NPM_BIN% run dev
-echo.
-echo [*] Frontend server process terminated.
-pause
-exit /b 0
-
-:run_queue
-title InduTrack KE - Queue Worker
-echo =====================================================================
-echo    InduTrack KE - Background Queue Worker
-echo =====================================================================
-echo Directory: %BACKEND_DIR%
-echo Command:   artisan queue:work --tries=3
-echo.
-cd /d "%BACKEND_DIR%"
-"%PHP_BIN%" artisan queue:work --tries=3
-echo.
-echo [*] Queue worker terminated.
-pause
-exit /b 0
-
-:run_scheduler
-title InduTrack KE - Schedule Worker
-echo =====================================================================
-echo    InduTrack KE - Scheduled Tasks Worker
-echo =====================================================================
-echo Directory: %BACKEND_DIR%
-echo Command:   artisan schedule:work
-echo.
-cd /d "%BACKEND_DIR%"
-"%PHP_BIN%" artisan schedule:work
-echo.
-echo [*] Scheduler worker terminated.
-pause
-exit /b 0
-
 :run_migrate
 title InduTrack KE - Database Migration ^& Seed
 echo =====================================================================
 echo    InduTrack KE - Database Migration and Seeder
 echo =====================================================================
 echo.
-if "%~1"=="" (
-    echo [!] WARNING: This will drop existing tables and re-seed sample data.
-    set /p confirm="Are you sure you want to proceed? (y/N): "
-    if /i not "!confirm!"=="y" (
-        echo [*] Operation cancelled.
-        timeout /t 2 >nul
-        goto :menu
-    )
+echo [!] WARNING: This will drop ALL existing data and re-seed sample data.
+set "confirm="
+set /p confirm="Proceed? (y/N): "
+if /i not "%confirm%"=="y" (
+    echo [*] Cancelled.
+    timeout /t 2 >nul
+    goto :menu
 )
 echo.
 cd /d "%BACKEND_DIR%"
 "%PHP_BIN%" artisan migrate:fresh --seed
 echo.
 echo [OK] Migration and seeding complete.
-if not "%~1"=="" exit /b 0
 pause
 goto :menu
 
@@ -224,10 +161,9 @@ echo    InduTrack KE - Frontend Production Build
 echo =====================================================================
 echo.
 cd /d "%FRONTEND_DIR%"
-call %NPM_BIN% run build
+call npm.cmd run build
 echo.
-echo [OK] Build process complete.
-if not "%~1"=="" exit /b 0
+echo [OK] Build complete.
 pause
 goto :menu
 
