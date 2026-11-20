@@ -23,6 +23,11 @@ Route::middleware('throttle:60,1')->group(function () {
     Route::post('/auth/register', [AuthController::class, 'register']);
     Route::post('/auth/login',    [AuthController::class, 'login']);
 });
+// Password-authenticated but not yet signed-in 2FA session challenge.
+Route::middleware('throttle:10,1')->group(function () {
+    Route::post('/auth/2fa/setup',  [AuthController::class, 'setup2fa']);
+    Route::post('/auth/2fa/verify', [AuthController::class, 'verify2fa']);
+});
 Route::get('/email/verify/{id}/{hash}', [\App\Http\Controllers\VerificationController::class, 'verify'])->name('verification.verify');
 
 // ─── Authenticated Base Routes ────────────────────────────────────────────────
@@ -40,9 +45,10 @@ Route::middleware(['auth:sanctum', 'throttle:60,1'])->group(function () {
     Route::post('/profile/photo',      [ProfileController::class, 'uploadPhoto']);
     Route::post('/profile/cv',         [ProfileController::class, 'uploadCv']);
     Route::post('/profile/transcript', [ProfileController::class, 'uploadTranscript']);
-    Route::post('/auth/2fa/setup',     [AuthController::class, 'setup2fa']);
-    Route::post('/auth/2fa/verify',    [AuthController::class, 'verify2fa']);
     Route::post('/auth/2fa/toggle',    [AuthController::class, 'toggle2fa']);
+
+    // Policy controls student, same-institution admin, and super-admin downloads.
+    Route::get('/documents/{id}/download', [DocumentController::class, 'download']);
 
     // ── Notifications ────────────────────────────────────────────────────────
     Route::get('/notifications',       [InstitutionController::class, 'notifications']);
@@ -77,7 +83,6 @@ Route::middleware(['auth:sanctum', 'throttle:60,1'])->group(function () {
         Route::post('/applications',          [ApplicationController::class, 'apply']);
         Route::post('/documents',             [DocumentController::class, 'upload']);
         Route::get('/documents',              [DocumentController::class, 'list']);
-        Route::get('/documents/{id}/download', [DocumentController::class, 'download']);
 
         // Student Logbook
         Route::get('/logbooks',               [LogbookController::class, 'index']);

@@ -55,7 +55,9 @@ class AuthController extends Controller
         } elseif ($role === 'company_supervisor') {
             $sup = \App\Models\CompanySupervisor::with('company')->where('user_id', $user->id)->first();
             return $user->name . ' (' . ($sup->company->name ?? 'Unknown Company') . ')';
-        } elseif (User::canonicalRoleName($role) === 'academic_supervisor' || $role === 'institution_admin') {
+        } elseif ($role === 'institution_admin') {
+            return $user->name . ' (' . ($user->institution->name ?? 'Unknown Institution') . ')';
+        } elseif (User::canonicalRoleName($role) === 'academic_supervisor') {
             $sup = \App\Models\InstitutionSupervisor::with('institution')->where('user_id', $user->id)->first();
             return $user->name . ' (' . ($sup->institution->name ?? 'University of Nairobi') . ')';
         } else {
@@ -78,6 +80,13 @@ class AuthController extends Controller
             ]);
         }
 
+        // Discard any earlier partial challenge and rotate the session before
+        // creating a new login state. A pending challenge is never an authenticated
+        // session and cannot inherit another user's authenticated state.
+        Auth::logout();
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
+
         // Get the user's primary role
         $role = DB::table('user_roles')
             ->join('roles', 'user_roles.role_id', '=', 'roles.id')
@@ -86,12 +95,11 @@ class AuthController extends Controller
 
         // Check if 2FA is enabled
         if ($user->two_factor_enabled) {
-            // Log in partially or fully? We should wait to regenerate session completely, but since we are stateful,
-            // we can set a session flag instead of a temp token.
             $request->session()->put('2fa:user:id', $user->id);
+            $request->session()->put('2fa:started_at', now()->timestamp);
             return response()->json([
                 '2fa_required' => true,
-                'setup_required' => empty($user->google2fa_secret)
+                'setup_required' => empty($user->google2fa_secret),
             ]);
         }
 
@@ -107,13 +115,21 @@ class AuthController extends Controller
 
     public function setup2fa(Request $request)
     {
-        $userId = $request->session()->get('2fa:user:id');
-        $user = $userId ? User::find($userId) : $request->user();
-        if (!$user) return response()->json(['message' => 'Unauthorized'], 401);
+        [$user, $isPending] = $this->resolveTwoFactorUser($request);
+        if (! $user) {
+            return response()->json(['message' => 'A valid login challenge or authenticated session is required.'], 401);
+        }
+
+        if ($isPending && (! $user->two_factor_enabled || $user->google2fa_secret)) {
+            return response()->json(['message' => 'This login requires code verification and cannot start enrollment.'], 403);
+        }
+        if (! $isPending && $user->two_factor_enabled) {
+            return response()->json(['message' => 'Two-factor authentication is already enabled.'], 409);
+        }
         
         $google2fa = app('pragmarx.google2fa');
         
-        if (!$user->google2fa_secret) {
+        if (! $user->google2fa_secret) {
             $user->google2fa_secret = $google2fa->generateSecretKey();
             $user->save();
         }
@@ -132,52 +148,94 @@ class AuthController extends Controller
 
     public function verify2fa(Request $request)
     {
-        $request->validate(['otp' => 'required|string']);
-        
-        $userId = $request->session()->get('2fa:user:id');
-        $user = $userId ? User::find($userId) : $request->user();
-        if (!$user) return response()->json(['message' => 'Unauthorized'], 401);
-        
+        $request->validate(['otp' => 'required|string|size:6|regex:/^[0-9]{6}$/']);
+        [$user, $isPending] = $this->resolveTwoFactorUser($request);
+        if (! $user) {
+            return response()->json(['message' => 'A valid login challenge or authenticated session is required.'], 401);
+        }
+        if (! $user->google2fa_secret) {
+            return response()->json(['message' => 'Set up an authenticator before verifying a code.'], 422);
+        }
+
         $google2fa = app('pragmarx.google2fa');
         $valid = $google2fa->verifyKey($user->google2fa_secret, $request->otp);
-        
-        if ($valid) {
-            if (!$user->two_factor_enabled) {
-                $user->two_factor_enabled = true;
-                $user->save();
-            }
-            
-            if ($userId) {
-                Auth::login($user);
-                $request->session()->forget('2fa:user:id');
-                $request->session()->regenerate();
-            }
-            
-            return response()->json([
-                'role' => User::canonicalRoleName($role ?? 'student'),
-                'user' => $user,
-                'context' => $this->getUserContextString($user, $role)
-            ]);
+
+        if (! $valid) {
+            return response()->json(['message' => 'Invalid authentication code.'], 422);
         }
-        
-        return response()->json(['message' => 'Invalid OTP'], 400);
+
+        if ($isPending || ! $user->two_factor_enabled) {
+            $user->two_factor_enabled = true;
+            $user->save();
+        }
+
+        if ($isPending) {
+            Auth::login($user);
+            $request->session()->forget(['2fa:user:id', '2fa:started_at']);
+            $request->session()->regenerate();
+        }
+
+        return $this->authenticatedUserResponse($user);
     }
 
     public function toggle2fa(Request $request)
     {
         $user = $request->user();
-        $user->two_factor_enabled = !$user->two_factor_enabled;
-        
-        if ($user->two_factor_enabled && !$user->google2fa_secret) {
-            $google2fa = app('pragmarx.google2fa');
-            $user->google2fa_secret = $google2fa->generateSecretKey();
+        if (! $user->two_factor_enabled) {
+            return response()->json(['message' => 'Use setup and code verification to enable two-factor authentication.'], 409);
         }
-        
+        if (! $user->google2fa_secret) {
+            return response()->json(['message' => 'Two-factor authentication has no configured secret; contact an administrator.'], 422);
+        }
+
+        $request->validate([
+            'current_password' => 'required|current_password',
+            'otp' => 'required|string|size:6|regex:/^[0-9]{6}$/',
+        ]);
+        $valid = app('pragmarx.google2fa')->verifyKey($user->google2fa_secret, $request->otp);
+        if (! $valid) {
+            return response()->json(['message' => 'Invalid authentication code.'], 422);
+        }
+
+        $user->two_factor_enabled = false;
+        $user->google2fa_secret = null;
         $user->save();
-        
+
         return response()->json([
-            'message' => '2FA ' . ($user->two_factor_enabled ? 'enabled' : 'disabled'),
-            'enabled' => $user->two_factor_enabled
+            'message' => 'Two-factor authentication disabled.',
+            'enabled' => false,
+        ]);
+    }
+
+    /** Resolve the short-lived password-verified challenge or current authenticated user. */
+    private function resolveTwoFactorUser(Request $request): array
+    {
+        $pendingId = $request->session()->get('2fa:user:id');
+        if ($pendingId) {
+            $startedAt = (int) $request->session()->get('2fa:started_at', 0);
+            $age = now()->timestamp - $startedAt;
+            if ($startedAt <= 0 || $age < 0 || $age > 300) {
+                $request->session()->forget(['2fa:user:id', '2fa:started_at']);
+                return [null, true];
+            }
+
+            return [User::find($pendingId), true];
+        }
+
+        return [$request->user(), false];
+    }
+
+    private function authenticatedUserResponse(User $user)
+    {
+        $role = DB::table('user_roles')
+            ->join('roles', 'user_roles.role_id', '=', 'roles.id')
+            ->where('user_roles.user_id', $user->id)
+            ->value('roles.name');
+
+        return response()->json([
+            'role' => User::canonicalRoleName($role ?? 'student'),
+            'user' => $user,
+            'context' => $this->getUserContextString($user, $role),
         ]);
     }
 

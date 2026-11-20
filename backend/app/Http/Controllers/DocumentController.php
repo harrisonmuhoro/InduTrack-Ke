@@ -7,6 +7,7 @@ use App\Models\Student;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Log;
 
 class DocumentController extends Controller
 {
@@ -30,15 +31,35 @@ class DocumentController extends Controller
         $file    = $request->file('file');
         $path    = $file->store("documents/{$student->id}", 'local');
 
-        $doc = Document::create([
-            'student_id'    => $student->id,
-            'type'          => $request->type,
-            'original_name' => $file->getClientOriginalName(),
-            'file_path'     => $path,
-            'mime_type'     => $file->getMimeType(),
-            'file_size'     => $file->getSize(),
-            'status'        => 'pending',
-        ]);
+        if (! $path) {
+            return response()->json(['message' => 'The document could not be stored.'], 500);
+        }
+
+        try {
+            $doc = Document::create([
+                'student_id'    => $student->id,
+                'type'          => $request->type,
+                'original_name' => $file->getClientOriginalName(),
+                'file_path'     => $path,
+                'mime_type'     => $file->getMimeType(),
+                'file_size'     => $file->getSize(),
+                'status'        => 'pending',
+            ]);
+        } catch (\Throwable $exception) {
+            try {
+                if (! Storage::disk('local')->delete($path)) {
+                    Log::error('Failed to remove uploaded document after database persistence failed.', [
+                        'student_id' => $student->id,
+                    ]);
+                }
+            } catch (\Throwable $cleanupException) {
+                Log::error('Document upload cleanup failed after database persistence failed.', [
+                    'student_id' => $student->id,
+                    'exception' => $cleanupException::class,
+                ]);
+            }
+            throw $exception;
+        }
 
         return response()->json($doc, 201);
     }
