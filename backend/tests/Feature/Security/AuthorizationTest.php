@@ -50,7 +50,7 @@ class AuthorizationTest extends TestCase
      */
     public function test_superadmin_endpoints_reject_non_superadmins(): void
     {
-        $student = User::where('email', 'john.doe@student.uonbi.ac.ke')->first();
+        $student = User::where('email', 'david.kamau@student.strathmore.edu')->first();
         $admin = User::where('email', 'admin@uonbi.ac.ke')->first();
         $companySup = User::where('email', 'jane.smith@safaricom.co.ke')->first();
         $superadmin = User::where('email', 'superadmin@indutrack.ke')->first();
@@ -601,7 +601,7 @@ class AuthorizationTest extends TestCase
     }
 
     /**
-     * Test 23: CompanyPolicy::view blocks unauthorized users from unverified companies while allowing verified companies.
+     * Test 23: Public verification does not authorize protected company records.
      */
     public function test_company_policy_view_distinguishes_verified_from_unverified_companies(): void
     {
@@ -613,8 +613,8 @@ class AuthorizationTest extends TestCase
             'is_verified'  => false,
         ]);
 
-        // A student who has no placement or application at this unverified company
-        $student = User::where('email', 'john.doe@student.uonbi.ac.ke')->first();
+        // David has no placement or application at Safaricom or this private company.
+        $student = User::where('email', 'david.kamau@student.strathmore.edu')->first();
 
         $policy = new \App\Policies\CompanyPolicy();
         $this->assertFalse($policy->view($student, $unverifiedCompany), 'Student must NOT be authorized to view unverified, unrelated company');

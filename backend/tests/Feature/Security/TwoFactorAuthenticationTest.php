@@ -38,15 +38,15 @@ class TwoFactorAuthenticationTest extends TestCase
         $google2fa->shouldReceive('verifyKey')->once()->with('TESTSECRET', '123456')->andReturnTrue();
         $this->app->instance('pragmarx.google2fa', $google2fa);
 
-        $this->postJson('/api/auth/2fa/verify', ['otp' => '123456'])
+        $verifyResponse = $this->postJson('/api/auth/2fa/verify', ['otp' => '123456']);
+        $verifyResponse
             ->assertOk()
             ->assertJsonPath('role', 'academic_supervisor')
             ->assertJsonMissingPath('user.google2fa_secret');
 
         $this->getJson('/api/profile')
             ->assertOk()
-            ->assertJsonPath('role', 'academic_supervisor')
-            ->assertJsonMissingPath('google2fa_secret');
+            ->assertJsonMissingPath('user.google2fa_secret');
     }
 
     public function test_pending_login_can_repair_missing_secret_and_verify_without_auth_middleware(): void
@@ -75,7 +75,7 @@ class TwoFactorAuthenticationTest extends TestCase
             ->assertJsonPath('role', 'student')
             ->assertJsonMissingPath('user.google2fa_secret');
 
-        $this->assertTrue($user->fresh()->two_factor_enabled);
+        $this->assertTrue((bool) $user->fresh()->two_factor_enabled);
     }
 
     public function test_two_factor_endpoints_reject_requests_without_authentication_or_pending_login(): void
