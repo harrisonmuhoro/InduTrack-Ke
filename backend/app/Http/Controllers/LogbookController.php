@@ -8,9 +8,13 @@ use App\Models\Student;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Database\UniqueConstraintViolationException;
 
 class LogbookController extends Controller
 {
+    /**
+     * Create a logbook entry for student's active placement.
+     */
     public function store(Request $request)
     {
         $request->validate([
@@ -20,9 +24,14 @@ class LogbookController extends Controller
             'lessons_learned' => 'nullable|string',
             'challenges'      => 'nullable|string',
             'plan_next_week'  => 'nullable|string',
+            'status'          => 'nullable|in:draft,submitted',
         ]);
 
-        $student = Student::where('user_id', $request->user()->id)->firstOrFail();
+        $student = Student::where('user_id', $request->user()->id)->first();
+        if (!$student) {
+            return response()->json(['message' => 'Forbidden. Only students can create logbook entries.'], 403);
+        }
+
         $placement = Placement::where('student_id', $student->id)
             ->where('status', 'active')
             ->first();
@@ -31,45 +40,99 @@ class LogbookController extends Controller
             return response()->json(['message' => 'No active placement found for logbook submission.'], 422);
         }
 
-        // Prevent duplicate week entries
+        // Prevent duplicate week entries at application layer
         $existing = LogbookEntry::where('placement_id', $placement->id)
             ->where('week_number', $request->week_number)
             ->first();
 
         if ($existing) {
-            return response()->json(['message' => 'An entry for this week already exists.'], 422);
+            return response()->json(['message' => 'An entry for this week already exists.'], 409);
         }
 
-        $entry = LogbookEntry::create([
-            'placement_id'    => $placement->id,
-            'entry_date'      => $request->entry_date,
-            'week_number'     => $request->week_number,
-            'activities'      => $request->activities,
-            'lessons_learned' => $request->lessons_learned,
-            'challenges'      => $request->challenges,
-            'plan_next_week'  => $request->plan_next_week,
-            'status'          => 'draft',
-        ]);
+        $status = $request->input('status', 'draft');
+
+        try {
+            $entry = LogbookEntry::create([
+                'placement_id'    => $placement->id,
+                'entry_date'      => $request->entry_date,
+                'week_number'     => $request->week_number,
+                'activities'      => $request->activities,
+                'lessons_learned' => $request->lessons_learned,
+                'challenges'      => $request->challenges,
+                'plan_next_week'  => $request->plan_next_week,
+                'status'          => $status,
+                'submitted_at'    => $status === 'submitted' ? now() : null,
+            ]);
+        } catch (UniqueConstraintViolationException $e) {
+            return response()->json(['message' => 'An entry for this week already exists.'], 409);
+        } catch (\Illuminate\Database\QueryException $e) {
+            if ($e->getCode() === '23000' || str_contains($e->getMessage(), 'logbook_entries_placement_week_unique')) {
+                return response()->json(['message' => 'An entry for this week already exists.'], 409);
+            }
+            throw $e;
+        }
 
         return response()->json($entry, 201);
     }
 
+    /**
+     * Update logbook entry within allowed 72-hour window.
+     */
     public function update(Request $request, $id)
     {
         $entry = LogbookEntry::with('placement.student')->findOrFail($id);
 
         // Enforce policy authorization (owner student and within editable 72h window)
         if (Gate::denies('update', $entry)) {
-            return response()->json(['message' => 'Forbidden. You do not own this logbook entry or it is locked.'], 403);
+            $reason = $entry->locked_at ? 'Entry is locked.' : 'Editing window (72 hours) has expired.';
+            return response()->json(['message' => "Forbidden. {$reason}"], 403);
         }
 
-        $entry->update($request->only([
+        $validated = $request->validate([
+            'activities'      => 'sometimes|required|string',
+            'lessons_learned' => 'nullable|string',
+            'challenges'      => 'nullable|string',
+            'plan_next_week'  => 'nullable|string',
+            'status'          => 'sometimes|in:draft,submitted',
+        ]);
+
+        // Prevent modification of locked or approval fields via mass-assignment
+        $updateData = $request->only([
             'activities', 'lessons_learned', 'challenges', 'plan_next_week',
-        ]));
+        ]);
+
+        if ($request->has('status') && $request->status === 'submitted' && $entry->status === 'draft') {
+            $updateData['status'] = 'submitted';
+            $updateData['submitted_at'] = now();
+        }
+
+        $entry->update($updateData);
 
         return response()->json($entry);
     }
 
+    /**
+     * Submit a draft logbook entry for supervisor review.
+     */
+    public function submit(Request $request, $id)
+    {
+        $entry = LogbookEntry::with('placement.student')->findOrFail($id);
+
+        if (Gate::denies('update', $entry)) {
+            return response()->json(['message' => 'Forbidden. Logbook entry cannot be submitted because it is locked or not owned.'], 403);
+        }
+
+        $entry->update([
+            'status' => 'submitted',
+            'submitted_at' => now(),
+        ]);
+
+        return response()->json(['message' => 'Logbook entry submitted successfully.', 'entry' => $entry]);
+    }
+
+    /**
+     * Get entries for the active student placement.
+     */
     public function index(Request $request)
     {
         $student = Student::where('user_id', $request->user()->id)->first();
@@ -84,22 +147,26 @@ class LogbookController extends Controller
         }
 
         $entries = $placement->logbookEntries()
-            ->with('comments.user')
+            ->with(['comments.user:id,name'])
             ->orderBy('week_number')
             ->get()
             ->map(function ($entry) {
                 $entry->is_editable = $entry->isEditable();
+                $entry->hours_left = max(0, 72 - $entry->created_at->diffInHours(now()));
                 return $entry;
             });
 
         return response()->json($entries);
     }
 
+    /**
+     * Add a comment to a logbook entry.
+     * Note: Does NOT automatically change entry status to approved.
+     */
     public function addComment(Request $request, $entryId)
     {
-        $request->validate(['comment' => 'required|string']);
+        $request->validate(['comment' => 'required|string|max:1000']);
         $entry = LogbookEntry::with('placement.student')->findOrFail($entryId);
-        $placement = $entry->placement;
         $user = $request->user();
 
         // Enforce policy authorization
@@ -107,31 +174,26 @@ class LogbookController extends Controller
             return response()->json(['message' => 'Forbidden. You are not authorized to comment on this logbook.'], 403);
         }
 
-        $isAcademic = ($placement->academic_supervisor_id === $user->id);
-        $isCompany = ($user->companySupervisor && $placement->company_supervisor_id === $user->companySupervisor->id);
-
         $comment = $entry->comments()->create([
             'user_id' => $user->id,
             'comment' => $request->comment,
         ]);
 
-        // Auto-approve entry when supervisor comments
-        if (($isAcademic || $isCompany) && in_array($entry->status, ['draft', 'submitted'])) {
-            $entry->update(['status' => 'reviewed']);
-        }
-
-        return response()->json($comment->load('user'), 201);
+        return response()->json($comment->load('user:id,name'), 201);
     }
 
+    /**
+     * Explicit review action: approved, rejected, flagged.
+     * Only assigned supervisors may execute this formal action.
+     */
     public function reviewEntry(Request $request, $entryId)
     {
         $request->validate([
             'action'  => 'required|in:approved,rejected,flagged',
-            'comment' => 'nullable|string',
+            'comment' => 'nullable|string|max:1000',
         ]);
 
         $entry = LogbookEntry::with('placement')->findOrFail($entryId);
-        $placement = $entry->placement;
         $user = $request->user();
 
         // Enforce policy authorization
@@ -139,7 +201,9 @@ class LogbookController extends Controller
             return response()->json(['message' => 'Forbidden. Only assigned supervisors can review this logbook entry.'], 403);
         }
 
-        $entry->update(['status' => $request->action]);
+        $entry->update([
+            'status' => $request->action,
+        ]);
 
         if ($request->comment) {
             $entry->comments()->create([
@@ -148,14 +212,16 @@ class LogbookController extends Controller
             ]);
         }
 
-        return response()->json($entry);
+        return response()->json($entry->load('comments.user:id,name'));
     }
 
+    /**
+     * Academic supervisor grades placement.
+     */
     public function grade(Request $request, $placementId)
     {
         $request->validate(['grade' => 'required|numeric|min:0|max:100']);
         $placement = Placement::with('student')->findOrFail($placementId);
-        $user = $request->user();
 
         // Enforce policy: only assigned academic supervisor may grade
         if (Gate::denies('grade', $placement)) {
@@ -167,14 +233,20 @@ class LogbookController extends Controller
     }
 
     /**
-     * Lock all entries older than 72 hours — called by scheduled command.
+     * Lock all entries older than 72 hours.
      */
     public function lockExpiredEntries(): int
     {
         $cutoff = now()->subHours(72);
-        $count  = LogbookEntry::whereNull('locked_at')
+        $entries = LogbookEntry::whereNull('locked_at')
             ->where('created_at', '<=', $cutoff)
-            ->update(['locked_at' => now(), 'status' => 'submitted']);
+            ->get();
+
+        $count = 0;
+        foreach ($entries as $entry) {
+            $entry->lock('Automatically locked after 72 hours');
+            $count++;
+        }
 
         return $count;
     }

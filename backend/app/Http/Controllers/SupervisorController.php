@@ -8,7 +8,9 @@ use App\Models\Placement;
 use App\Models\WeeklyLog;
 use App\Models\StudentFlag;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Database\UniqueConstraintViolationException;
 
 class SupervisorController extends Controller
 {
@@ -27,7 +29,7 @@ class SupervisorController extends Controller
         if ($user->isCompanySupervisor()) {
             $companySupervisor = CompanySupervisor::where('user_id', $user->id)->first();
             if ($companySupervisor) {
-                $placements = Placement::with('student.user', 'company')
+                $placements = Placement::with('student.user', 'company', 'weeklyLogs')
                     ->where('company_supervisor_id', $companySupervisor->id)
                     ->get();
                 return response()->json($placements);
@@ -36,7 +38,7 @@ class SupervisorController extends Controller
         }
 
         // Institution / academic supervisor
-        $placements = Placement::with('student.user', 'company')
+        $placements = Placement::with('student.user', 'company', 'fieldVisits')
             ->where('academic_supervisor_id', $user->id)
             ->get();
 
@@ -62,7 +64,7 @@ class SupervisorController extends Controller
     }
 
     /**
-     * Submit a weekly performance log for a student.
+     * Submit a weekly performance log for a student (Company Supervisor only).
      */
     public function submitWeeklyLog(Request $request)
     {
@@ -75,7 +77,7 @@ class SupervisorController extends Controller
             'attendance_score' => 'required|integer|min:1|max:5',
             'specific_feedback'=> 'nullable|string',
             'has_concern'      => 'boolean',
-            'concern_details'  => 'nullable|string',
+            'concern_details'  => 'required_if:has_concern,true|nullable|string',
         ]);
 
         $user = $request->user();
@@ -98,31 +100,44 @@ class SupervisorController extends Controller
             ->first();
 
         if ($existing) {
-            return response()->json(['message' => 'Weekly log for this week already submitted.'], 422);
+            return response()->json(['message' => 'Weekly log for this week already submitted.'], 409);
         }
 
-        $log = WeeklyLog::create([
-            'placement_id'          => $request->placement_id,
-            'company_supervisor_id' => $supervisor ? $supervisor->id : $placement->company_supervisor_id,
-            'week_number'           => $request->week_number,
-            'tasks_assigned'        => $request->tasks_assigned,
-            'tasks_completed'       => $request->tasks_completed,
-            'conduct_score'         => $request->conduct_score,
-            'attendance_score'      => $request->attendance_score,
-            'specific_feedback'     => $request->specific_feedback,
-            'has_concern'           => $request->has_concern ?? false,
-            'concern_details'       => $request->concern_details,
-        ]);
+        try {
+            $log = DB::transaction(function () use ($request, $user, $supervisor, $placement) {
+                $weeklyLog = WeeklyLog::create([
+                    'placement_id'          => $request->placement_id,
+                    'company_supervisor_id' => $supervisor ? $supervisor->id : $placement->company_supervisor_id,
+                    'week_number'           => $request->week_number,
+                    'tasks_assigned'        => $request->tasks_assigned,
+                    'tasks_completed'       => $request->tasks_completed,
+                    'conduct_score'         => $request->conduct_score,
+                    'attendance_score'      => $request->attendance_score,
+                    'specific_feedback'     => $request->specific_feedback,
+                    'has_concern'           => $request->has_concern ?? false,
+                    'concern_details'       => $request->concern_details,
+                ]);
 
-        // Auto-flag if concern raised
-        if ($request->has_concern && $request->concern_details) {
-            StudentFlag::create([
-                'placement_id' => $request->placement_id,
-                'flagged_by'   => $user->id,
-                'severity'     => 'warning',
-                'reason'       => 'weekly_concern',
-                'details'      => $request->concern_details,
-            ]);
+                // Atomically create student flag if concern is raised
+                if ($request->has_concern && $request->concern_details) {
+                    StudentFlag::create([
+                        'placement_id' => $request->placement_id,
+                        'flagged_by'   => $user->id,
+                        'severity'     => 'warning',
+                        'reason'       => 'weekly_concern',
+                        'details'      => $request->concern_details,
+                    ]);
+                }
+
+                return $weeklyLog;
+            });
+        } catch (UniqueConstraintViolationException $e) {
+            return response()->json(['message' => 'Weekly log for this week already submitted.'], 409);
+        } catch (\Illuminate\Database\QueryException $e) {
+            if ($e->getCode() === '23000' || str_contains($e->getMessage(), 'weekly_logs_placement_week_unique')) {
+                return response()->json(['message' => 'Weekly log for this week already submitted.'], 409);
+            }
+            throw $e;
         }
 
         return response()->json($log, 201);

@@ -88,6 +88,7 @@ Route::middleware(['auth:sanctum', 'throttle:60,1'])->group(function () {
         Route::get('/logbooks',               [LogbookController::class, 'index']);
         Route::post('/logbooks',              [LogbookController::class, 'store']);
         Route::put('/logbooks/{id}',          [LogbookController::class, 'update']);
+        Route::post('/logbooks/{id}/submit',  [LogbookController::class, 'submit']);
 
         // Company Rating (Student submits review for their completed attachment)
         Route::post('/companies/{companyId}/rate', [EvaluationController::class, 'rateCompany']);
