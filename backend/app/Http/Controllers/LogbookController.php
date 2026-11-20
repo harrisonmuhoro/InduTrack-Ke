@@ -24,7 +24,11 @@ class LogbookController extends Controller
         $student = Student::where('user_id', $request->user()->id)->firstOrFail();
         $placement = Placement::where('student_id', $student->id)
             ->where('status', 'active')
-            ->firstOrFail();
+            ->first();
+
+        if (!$placement) {
+            return response()->json(['message' => 'No active placement found for logbook submission.'], 422);
+        }
 
         // Prevent duplicate week entries
         $existing = LogbookEntry::where('placement_id', $placement->id)
@@ -51,7 +55,13 @@ class LogbookController extends Controller
 
     public function update(Request $request, $id)
     {
-        $entry = LogbookEntry::findOrFail($id);
+        $entry = LogbookEntry::with('placement.student')->findOrFail($id);
+        $user = $request->user();
+
+        // Enforce ownership: only author student can edit
+        if (!$user->isSuperAdmin() && $entry->placement?->student?->user_id !== $user->id) {
+            return response()->json(['message' => 'Forbidden. You do not own this logbook entry.'], 403);
+        }
 
         if (!$entry->isEditable()) {
             return response()->json(['message' => 'This logbook entry is locked and cannot be edited.'], 403);
@@ -92,15 +102,26 @@ class LogbookController extends Controller
     public function addComment(Request $request, $entryId)
     {
         $request->validate(['comment' => 'required|string']);
-        $entry = LogbookEntry::findOrFail($entryId);
+        $entry = LogbookEntry::with('placement.student')->findOrFail($entryId);
+        $placement = $entry->placement;
+        $user = $request->user();
+
+        $isStudent = ($placement->student?->user_id === $user->id);
+        $isAcademic = ($placement->academic_supervisor_id === $user->id);
+        $isCompany = ($user->companySupervisor && $placement->company_supervisor_id === $user->companySupervisor->id);
+        $isInstAdmin = ($user->isInstitutionAdmin() && $placement->student?->institution_id === $user->institution_id);
+
+        if (!$user->isSuperAdmin() && !$isStudent && !$isAcademic && !$isCompany && !$isInstAdmin) {
+            return response()->json(['message' => 'Forbidden. You are not authorized to comment on this logbook.'], 403);
+        }
 
         $comment = $entry->comments()->create([
-            'user_id' => $request->user()->id,
+            'user_id' => $user->id,
             'comment' => $request->comment,
         ]);
 
         // Auto-approve entry when supervisor comments
-        if (in_array($entry->status, ['draft', 'submitted'])) {
+        if (($isAcademic || $isCompany) && in_array($entry->status, ['draft', 'submitted'])) {
             $entry->update(['status' => 'reviewed']);
         }
 
@@ -114,12 +135,23 @@ class LogbookController extends Controller
             'comment' => 'nullable|string',
         ]);
 
-        $entry = LogbookEntry::findOrFail($entryId);
+        $entry = LogbookEntry::with('placement')->findOrFail($entryId);
+        $placement = $entry->placement;
+        $user = $request->user();
+
+        // Enforce supervisor assignment check
+        $isAcademic = ($placement->academic_supervisor_id === $user->id);
+        $isCompany = ($user->companySupervisor && $placement->company_supervisor_id === $user->companySupervisor->id);
+
+        if (!$user->isSuperAdmin() && !$isAcademic && !$isCompany) {
+            return response()->json(['message' => 'Forbidden. Only assigned supervisors can review this logbook entry.'], 403);
+        }
+
         $entry->update(['status' => $request->action]);
 
         if ($request->comment) {
             $entry->comments()->create([
-                'user_id' => $request->user()->id,
+                'user_id' => $user->id,
                 'comment' => "[{$request->action}] " . $request->comment,
             ]);
         }
@@ -130,7 +162,16 @@ class LogbookController extends Controller
     public function grade(Request $request, $placementId)
     {
         $request->validate(['grade' => 'required|numeric|min:0|max:100']);
-        $placement = Placement::findOrFail($placementId);
+        $placement = Placement::with('student')->findOrFail($placementId);
+        $user = $request->user();
+
+        $isAcademic = ($placement->academic_supervisor_id === $user->id);
+        $isInstAdmin = ($user->isInstitutionAdmin() && $placement->student?->institution_id === $user->institution_id);
+
+        if (!$user->isSuperAdmin() && !$isAcademic && !$isInstAdmin) {
+            return response()->json(['message' => 'Forbidden. Only the assigned academic supervisor or institution admin can submit grades.'], 403);
+        }
+
         $placement->update(['academic_grade' => $request->grade]);
         return response()->json(['message' => 'Grade recorded for placement ' . $placementId, 'placement' => $placement]);
     }

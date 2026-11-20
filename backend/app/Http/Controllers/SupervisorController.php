@@ -16,20 +16,27 @@ class SupervisorController extends Controller
      */
     public function assignedStudents(Request $request)
     {
-        $userId = $request->user()->id;
+        $user = $request->user();
+
+        if ($user->isSuperAdmin()) {
+            return response()->json(Placement::with('student.user', 'company')->get());
+        }
 
         // Company supervisor
-        $companySupervisor = CompanySupervisor::where('user_id', $userId)->first();
-        if ($companySupervisor) {
-            $placements = Placement::with('student.user', 'company')
-                ->where('company_supervisor_id', $companySupervisor->id)
-                ->get();
-            return response()->json($placements);
+        if ($user->isCompanySupervisor()) {
+            $companySupervisor = CompanySupervisor::where('user_id', $user->id)->first();
+            if ($companySupervisor) {
+                $placements = Placement::with('student.user', 'company')
+                    ->where('company_supervisor_id', $companySupervisor->id)
+                    ->get();
+                return response()->json($placements);
+            }
+            return response()->json([]);
         }
 
         // Institution / academic supervisor
         $placements = Placement::with('student.user', 'company')
-            ->where('academic_supervisor_id', $userId)
+            ->where('academic_supervisor_id', $user->id)
             ->get();
 
         return response()->json($placements);
@@ -44,6 +51,15 @@ class SupervisorController extends Controller
             'student.user',
             'logbookEntries.comments.user',
         ])->findOrFail($placementId);
+
+        $user = $request->user();
+        $isAcademic = ($placement->academic_supervisor_id === $user->id);
+        $isCompany = ($user->companySupervisor && $placement->company_supervisor_id === $user->companySupervisor->id);
+        $isInstAdmin = ($user->isInstitutionAdmin() && $placement->student?->institution_id === $user->institution_id);
+
+        if (!$user->isSuperAdmin() && !$isAcademic && !$isCompany && !$isInstAdmin) {
+            return response()->json(['message' => 'Forbidden. You are not assigned to supervise this placement.'], 403);
+        }
 
         return response()->json($placement);
     }
@@ -65,7 +81,19 @@ class SupervisorController extends Controller
             'concern_details'  => 'nullable|string',
         ]);
 
-        $supervisor = CompanySupervisor::where('user_id', $request->user()->id)->firstOrFail();
+        $user = $request->user();
+        $supervisor = CompanySupervisor::where('user_id', $user->id)->first();
+
+        if (!$supervisor && !$user->isSuperAdmin()) {
+            return response()->json(['message' => 'Forbidden. Only company supervisors can submit weekly performance logs.'], 403);
+        }
+
+        $placement = Placement::findOrFail($request->placement_id);
+
+        // Enforce supervisor assignment
+        if (!$user->isSuperAdmin() && $placement->company_supervisor_id !== $supervisor->id) {
+            return response()->json(['message' => 'Forbidden. You are not the assigned company supervisor for this placement.'], 403);
+        }
 
         // Prevent duplicate weekly log
         $existing = WeeklyLog::where('placement_id', $request->placement_id)
@@ -77,23 +105,23 @@ class SupervisorController extends Controller
         }
 
         $log = WeeklyLog::create([
-            'placement_id'       => $request->placement_id,
-            'company_supervisor_id' => $supervisor->id,
-            'week_number'        => $request->week_number,
-            'tasks_assigned'     => $request->tasks_assigned,
-            'tasks_completed'    => $request->tasks_completed,
-            'conduct_score'      => $request->conduct_score,
-            'attendance_score'   => $request->attendance_score,
-            'specific_feedback'  => $request->specific_feedback,
-            'has_concern'        => $request->has_concern ?? false,
-            'concern_details'    => $request->concern_details,
+            'placement_id'          => $request->placement_id,
+            'company_supervisor_id' => $supervisor ? $supervisor->id : $placement->company_supervisor_id,
+            'week_number'           => $request->week_number,
+            'tasks_assigned'        => $request->tasks_assigned,
+            'tasks_completed'       => $request->tasks_completed,
+            'conduct_score'         => $request->conduct_score,
+            'attendance_score'      => $request->attendance_score,
+            'specific_feedback'     => $request->specific_feedback,
+            'has_concern'           => $request->has_concern ?? false,
+            'concern_details'       => $request->concern_details,
         ]);
 
         // Auto-flag if concern raised
         if ($request->has_concern && $request->concern_details) {
             StudentFlag::create([
                 'placement_id' => $request->placement_id,
-                'flagged_by'   => $request->user()->id,
+                'flagged_by'   => $user->id,
                 'severity'     => 'warning',
                 'reason'       => 'weekly_concern',
                 'details'      => $request->concern_details,
@@ -108,9 +136,21 @@ class SupervisorController extends Controller
      */
     public function weeklyLogs(Request $request, $placementId)
     {
+        $placement = Placement::with('student')->findOrFail($placementId);
+        $user = $request->user();
+
+        $isAcademic = ($placement->academic_supervisor_id === $user->id);
+        $isCompany = ($user->companySupervisor && $placement->company_supervisor_id === $user->companySupervisor->id);
+        $isInstAdmin = ($user->isInstitutionAdmin() && $placement->student?->institution_id === $user->institution_id);
+
+        if (!$user->isSuperAdmin() && !$isAcademic && !$isCompany && !$isInstAdmin) {
+            return response()->json(['message' => 'Forbidden. Cannot view logs for unassigned placement.'], 403);
+        }
+
         $logs = WeeklyLog::where('placement_id', $placementId)
             ->orderBy('week_number')
             ->get();
+
         return response()->json($logs);
     }
 
@@ -126,9 +166,20 @@ class SupervisorController extends Controller
             'details'      => 'nullable|string',
         ]);
 
+        $placement = Placement::with('student')->findOrFail($request->placement_id);
+        $user = $request->user();
+
+        $isAcademic = ($placement->academic_supervisor_id === $user->id);
+        $isCompany = ($user->companySupervisor && $placement->company_supervisor_id === $user->companySupervisor->id);
+        $isInstAdmin = ($user->isInstitutionAdmin() && $placement->student?->institution_id === $user->institution_id);
+
+        if (!$user->isSuperAdmin() && !$isAcademic && !$isCompany && !$isInstAdmin) {
+            return response()->json(['message' => 'Forbidden. Cannot flag unassigned student.'], 403);
+        }
+
         $flag = StudentFlag::create([
             'placement_id' => $request->placement_id,
-            'flagged_by'   => $request->user()->id,
+            'flagged_by'   => $user->id,
             'severity'     => $request->severity,
             'reason'       => $request->reason,
             'details'      => $request->details,

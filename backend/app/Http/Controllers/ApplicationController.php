@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\Application;
 use App\Models\Student;
+use App\Models\AttachmentSlot;
+use App\Models\Placement;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use App\Notifications\ApplicationStatusUpdated;
@@ -13,16 +15,34 @@ class ApplicationController extends Controller
     public function apply(Request $request)
     {
         $request->validate([
-            'slot_id' => 'required|exists:attachment_slots,id',
+            'slot_id'      => 'required|exists:attachment_slots,id',
             'cover_letter' => 'nullable|string',
         ]);
 
         $student = Student::where('user_id', $request->user()->id)->firstOrFail();
 
+        // Prevent duplicate application for the same slot
+        $existingApp = Application::where('student_id', $student->id)
+            ->where('slot_id', $request->slot_id)
+            ->first();
+
+        if ($existingApp) {
+            return response()->json(['message' => 'You have already applied for this slot.'], 422);
+        }
+
+        // Prevent application if student already has an active placement
+        $activePlacement = Placement::where('student_id', $student->id)
+            ->where('status', 'active')
+            ->first();
+
+        if ($activePlacement) {
+            return response()->json(['message' => 'You already have an active placement.'], 422);
+        }
+
         $application = Application::create([
-            'student_id' => $student->id,
-            'slot_id' => $request->slot_id,
-            'status' => 'submitted',
+            'student_id'   => $student->id,
+            'slot_id'      => $request->slot_id,
+            'status'       => 'submitted',
             'cover_letter' => $request->cover_letter,
         ]);
 
@@ -38,14 +58,22 @@ class ApplicationController extends Controller
     public function updateStatus(Request $request, $id)
     {
         $request->validate(['status' => 'required|in:shortlisted,accepted,rejected']);
-        $application = Application::with('student.user')->findOrFail($id);
+        $application = Application::with(['student.user', 'slot.company'])->findOrFail($id);
+        $user = $request->user();
+
+        // Enforce authorization: Company owning slot, institution admin of student, or superadmin
+        $isCompany = ($application->slot && $application->slot->company_id === $user->getCompanyId());
+        $isInstAdmin = ($user->isInstitutionAdmin() && $application->student?->institution_id === $user->institution_id);
+
+        if (!$user->isSuperAdmin() && !$isCompany && !$isInstAdmin) {
+            return response()->json(['message' => 'Forbidden. You are not authorized to update this application.'], 403);
+        }
+
         $application->update(['status' => $request->status]);
 
         // Send notification
-        $application->student->user->notify(new ApplicationStatusUpdated($application));
-
-        if ($request->status === 'accepted') {
-            // Generate offer letter PDF logic would typically queue a job here
+        if ($application->student?->user) {
+            $application->student->user->notify(new ApplicationStatusUpdated($application));
         }
 
         return response()->json($application);
@@ -54,16 +82,23 @@ class ApplicationController extends Controller
     public function generateOfferLetter(Request $request, $id)
     {
         $application = Application::with('student.user', 'slot.company')->findOrFail($id);
-        
+        $user = $request->user();
+
+        $isStudent = ($application->student?->user_id === $user->id);
+        $isCompany = ($application->slot && $application->slot->company_id === $user->getCompanyId());
+        $isInstAdmin = ($user->isInstitutionAdmin() && $application->student?->institution_id === $user->institution_id);
+
+        if (!$user->isSuperAdmin() && !$isStudent && !$isCompany && !$isInstAdmin) {
+            return response()->json(['message' => 'Forbidden. You cannot view this offer letter.'], 403);
+        }
+
         $data = [
-            'studentName' => $application->student->user->name,
-            'companyName' => $application->slot->company->name,
-            'department' => $application->slot->department,
-            'date' => now()->format('Y-m-d'),
+            'studentName' => $application->student->user->name ?? 'Student',
+            'companyName' => $application->slot->company->name ?? 'Company',
+            'department'  => $application->slot->department ?? 'General',
+            'date'        => now()->format('Y-m-d'),
         ];
 
-        // For this to work, we need a resources/views/pdf/offer_letter.blade.php
-        // but we can load HTML directly for the demo
         $html = "
             <h1>Offer Letter</h1>
             <p>Date: {$data['date']}</p>

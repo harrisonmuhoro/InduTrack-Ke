@@ -20,13 +20,39 @@ class InstitutionController extends Controller
 
     public function analytics(Request $request)
     {
-        $data = Cache::remember('institution_analytics', 300, function () {
-            $totalStudents     = Student::count();
-            $activePlacements  = Placement::where('status', 'active')->count();
-            $openSlots         = AttachmentSlot::where('status', 'open')->count();
-            $pendingDocuments  = Document::where('status', 'pending')->count();
-            $flaggedStudents   = StudentFlag::where('resolved', false)->count();
-            $completedPlacements = Placement::where('status', 'completed')->count();
+        $user = $request->user();
+        $instId = $user->institution_id;
+        $isSuper = $user->isSuperAdmin();
+
+        $cacheKey = $isSuper ? 'analytics_superadmin' : "analytics_inst_{$instId}";
+
+        $data = Cache::remember($cacheKey, 300, function () use ($instId, $isSuper) {
+            $studentQuery = Student::query();
+            if (!$isSuper && $instId) {
+                $studentQuery->where('institution_id', $instId);
+            }
+            $totalStudents = $studentQuery->count();
+
+            $placementQuery = Placement::query();
+            if (!$isSuper && $instId) {
+                $placementQuery->whereHas('student', fn($q) => $q->where('institution_id', $instId));
+            }
+            $activePlacements    = (clone $placementQuery)->where('status', 'active')->count();
+            $completedPlacements = (clone $placementQuery)->where('status', 'completed')->count();
+
+            $openSlots = AttachmentSlot::where('status', 'open')->count();
+
+            $docQuery = Document::where('status', 'pending');
+            if (!$isSuper && $instId) {
+                $docQuery->whereHas('student', fn($q) => $q->where('institution_id', $instId));
+            }
+            $pendingDocuments = $docQuery->count();
+
+            $flagQuery = StudentFlag::where('resolved', false);
+            if (!$isSuper && $instId) {
+                $flagQuery->whereHas('placement.student', fn($q) => $q->where('institution_id', $instId));
+            }
+            $flaggedStudents = $flagQuery->count();
 
             // Placement rate
             $placementRate = $totalStudents > 0
@@ -35,15 +61,20 @@ class InstitutionController extends Controller
 
             // This week logbook submissions
             $weekStart = now()->startOfWeek();
-            $logbooksThisWeek = LogbookEntry::where('created_at', '>=', $weekStart)->count();
+            $logbookQuery = LogbookEntry::where('created_at', '>=', $weekStart);
+            if (!$isSuper && $instId) {
+                $logbookQuery->whereHas('placement.student', fn($q) => $q->where('institution_id', $instId));
+            }
+            $logbooksThisWeek = $logbookQuery->count();
 
-            // Students with no logbook entry in last 2 weeks (inactive)
+            // Inactive students (no logbook in 2 weeks)
             $cutoff = now()->subWeeks(2);
-            $inactiveStudents = Student::whereHas('placements', function ($q) {
-                $q->where('status', 'active');
-            })->whereDoesntHave('placements.logbookEntries', function ($q) use ($cutoff) {
-                $q->where('created_at', '>=', $cutoff);
-            })->count();
+            $inactiveQuery = Student::whereHas('placements', fn($q) => $q->where('status', 'active'))
+                ->whereDoesntHave('placements.logbookEntries', fn($q) => $q->where('created_at', '>=', $cutoff));
+            if (!$isSuper && $instId) {
+                $inactiveQuery->where('institution_id', $instId);
+            }
+            $inactiveStudents = $inactiveQuery->count();
 
             return compact(
                 'totalStudents', 'activePlacements', 'openSlots',
@@ -72,12 +103,20 @@ class InstitutionController extends Controller
 
     public function students(Request $request)
     {
+        $user = $request->user();
         $query = Student::with('user', 'placements.company');
 
+        // Institutional boundary isolation
+        if (!$user->isSuperAdmin() && $user->institution_id) {
+            $query->where('institution_id', $user->institution_id);
+        }
+
         if ($request->search) {
-            $query->whereHas('user', function ($q) use ($request) {
-                $q->where('name', 'like', '%' . $request->search . '%');
-            })->orWhere('reg_number', 'like', '%' . $request->search . '%');
+            $query->where(function ($sq) use ($request) {
+                $sq->whereHas('user', function ($q) use ($request) {
+                    $q->where('name', 'like', '%' . $request->search . '%');
+                })->orWhere('reg_number', 'like', '%' . $request->search . '%');
+            });
         }
 
         if ($request->status) {
@@ -100,6 +139,12 @@ class InstitutionController extends Controller
             'placements.evaluations',
             'documents',
         ])->findOrFail($id);
+
+        // Enforce institutional boundary
+        $user = $request->user();
+        if (!$user->isSuperAdmin() && $student->institution_id !== $user->institution_id) {
+            return response()->json(['message' => 'Forbidden. Cannot access another institution\'s student records.'], 403);
+        }
 
         return response()->json($student);
     }
@@ -125,7 +170,7 @@ class InstitutionController extends Controller
     {
         $company = Company::findOrFail($id);
         $company->update(['is_verified' => true]);
-        Cache::forget('institution_analytics');
+        Cache::flush();
         return response()->json(['message' => 'Company verified successfully', 'company' => $company]);
     }
 
@@ -134,6 +179,7 @@ class InstitutionController extends Controller
         $request->validate(['reason' => 'required|string']);
         $company = Company::findOrFail($id);
         $company->update(['is_verified' => false, 'blacklist_reason' => $request->reason]);
+        Cache::flush();
         return response()->json(['message' => 'Company blacklisted', 'company' => $company]);
     }
 
@@ -141,7 +187,13 @@ class InstitutionController extends Controller
 
     public function placements(Request $request)
     {
+        $user = $request->user();
         $query = Placement::with('student.user', 'company', 'period');
+
+        // Scoped to institution
+        if (!$user->isSuperAdmin() && $user->institution_id) {
+            $query->whereHas('student', fn($q) => $q->where('institution_id', $user->institution_id));
+        }
 
         if ($request->status) {
             $query->where('status', $request->status);
@@ -152,17 +204,32 @@ class InstitutionController extends Controller
 
     public function approvePlacement(Request $request, $id)
     {
-        $placement = Placement::findOrFail($id);
+        $placement = Placement::with('student')->findOrFail($id);
+        $user = $request->user();
+
+        // Enforce institutional boundary
+        if (!$user->isSuperAdmin() && $placement->student?->institution_id !== $user->institution_id) {
+            return response()->json(['message' => 'Forbidden. Cannot approve placements for another institution.'], 403);
+        }
+
         $placement->update(['status' => 'active']);
-        Cache::forget('institution_analytics');
+        Cache::flush();
         return response()->json(['message' => 'Placement approved', 'placement' => $placement]);
     }
 
     public function rejectPlacement(Request $request, $id)
     {
         $request->validate(['reason' => 'nullable|string']);
-        $placement = Placement::findOrFail($id);
+        $placement = Placement::with('student')->findOrFail($id);
+        $user = $request->user();
+
+        // Enforce institutional boundary
+        if (!$user->isSuperAdmin() && $placement->student?->institution_id !== $user->institution_id) {
+            return response()->json(['message' => 'Forbidden. Cannot reject placements for another institution.'], 403);
+        }
+
         $placement->update(['status' => 'rejected']);
+        Cache::flush();
         return response()->json(['message' => 'Placement rejected', 'placement' => $placement]);
     }
 
@@ -170,22 +237,29 @@ class InstitutionController extends Controller
 
     public function compliance(Request $request)
     {
-        // Students with active placement but no logbook in 2 weeks
+        $user = $request->user();
+        $instId = $user->institution_id;
+        $isSuper = $user->isSuperAdmin();
         $cutoff2w = now()->subWeeks(2);
+
+        // Students with active placement but no logbook in 2 weeks
         $inactive = Placement::with('student.user', 'company')
             ->where('status', 'active')
+            ->when(!$isSuper && $instId, fn($q) => $q->whereHas('student', fn($s) => $s->where('institution_id', $instId)))
             ->whereDoesntHave('logbookEntries', fn($q) => $q->where('created_at', '>=', $cutoff2w))
             ->get();
 
         // Flagged students
         $flagged = StudentFlag::with('placement.student.user', 'placement.company', 'flagger')
             ->where('resolved', false)
+            ->when(!$isSuper && $instId, fn($q) => $q->whereHas('placement.student', fn($s) => $s->where('institution_id', $instId)))
             ->latest()
             ->get();
 
         // Pending document reviews
         $pendingDocs = Document::with('student.user')
             ->where('status', 'pending')
+            ->when(!$isSuper && $instId, fn($q) => $q->whereHas('student', fn($s) => $s->where('institution_id', $instId)))
             ->latest()
             ->get();
 
@@ -198,7 +272,14 @@ class InstitutionController extends Controller
 
     public function resolveFlag(Request $request, $flagId)
     {
-        $flag = StudentFlag::findOrFail($flagId);
+        $flag = StudentFlag::with('placement.student')->findOrFail($flagId);
+        $user = $request->user();
+
+        // Institutional check
+        if (!$user->isSuperAdmin() && $flag->placement?->student?->institution_id !== $user->institution_id) {
+            return response()->json(['message' => 'Forbidden. Cannot resolve flag for another institution.'], 403);
+        }
+
         $flag->update(['resolved' => true, 'resolved_at' => now()]);
         return response()->json(['message' => 'Flag resolved']);
     }
@@ -207,7 +288,14 @@ class InstitutionController extends Controller
 
     public function reportPlacements(Request $request)
     {
-        $placements = Placement::with('student.user', 'company', 'period')->get();
+        $user = $request->user();
+        $query = Placement::with('student.user', 'company', 'period');
+
+        if (!$user->isSuperAdmin() && $user->institution_id) {
+            $query->whereHas('student', fn($q) => $q->where('institution_id', $user->institution_id));
+        }
+
+        $placements = $query->get();
 
         if ($request->format === 'csv') {
             $csv = "Student,Reg Number,Company,Status,Period\n";
@@ -231,14 +319,41 @@ class InstitutionController extends Controller
 
     public function reportCompliance(Request $request)
     {
+        $user = $request->user();
+        $instId = $user->institution_id;
+        $isSuper = $user->isSuperAdmin();
         $cutoff2w = now()->subWeeks(2);
+
+        $placementQuery = Placement::where('status', 'active');
+        if (!$isSuper && $instId) {
+            $placementQuery->whereHas('student', fn($q) => $q->where('institution_id', $instId));
+        }
+        $totalActive = $placementQuery->count();
+
+        $logbookQuery = LogbookEntry::where('created_at', '>=', now()->startOfWeek());
+        if (!$isSuper && $instId) {
+            $logbookQuery->whereHas('placement.student', fn($q) => $q->where('institution_id', $instId));
+        }
+        $logbooksThisWeek = $logbookQuery->count();
+
+        $inactiveQuery = Placement::where('status', 'active')
+            ->whereDoesntHave('logbookEntries', fn($q) => $q->where('created_at', '>=', $cutoff2w));
+        if (!$isSuper && $instId) {
+            $inactiveQuery->whereHas('student', fn($q) => $q->where('institution_id', $instId));
+        }
+        $inactiveCount = $inactiveQuery->count();
+
+        $flagQuery = StudentFlag::where('resolved', false);
+        if (!$isSuper && $instId) {
+            $flagQuery->whereHas('placement.student', fn($q) => $q->where('institution_id', $instId));
+        }
+        $unresolvedFlags = $flagQuery->count();
+
         $data = [
-            'total_active_placements' => Placement::where('status', 'active')->count(),
-            'submitted_logbooks_this_week' => LogbookEntry::where('created_at', '>=', now()->startOfWeek())->count(),
-            'inactive_students_count' => Placement::where('status', 'active')
-                ->whereDoesntHave('logbookEntries', fn($q) => $q->where('created_at', '>=', $cutoff2w))
-                ->count(),
-            'unresolved_flags' => StudentFlag::where('resolved', false)->count(),
+            'total_active_placements' => $totalActive,
+            'submitted_logbooks_this_week' => $logbooksThisWeek,
+            'inactive_students_count' => $inactiveCount,
+            'unresolved_flags' => $unresolvedFlags,
         ];
 
         if ($request->format === 'csv') {
@@ -264,15 +379,22 @@ class InstitutionController extends Controller
             'rejection_reason' => 'required_if:status,rejected|nullable|string',
         ]);
 
-        $doc = Document::findOrFail($id);
+        $doc = Document::with('student')->findOrFail($id);
+        $user = $request->user();
+
+        // Enforce institutional boundary
+        if (!$user->isSuperAdmin() && $doc->student?->institution_id !== $user->institution_id) {
+            return response()->json(['message' => 'Forbidden. Cannot review documents for another institution.'], 403);
+        }
+
         $doc->update([
             'status'           => $request->status,
             'rejection_reason' => $request->rejection_reason,
-            'reviewed_by'      => $request->user()->id,
+            'reviewed_by'      => $user->id,
             'reviewed_at'      => now(),
         ]);
 
-        Cache::forget('institution_analytics');
+        Cache::flush();
         return response()->json($doc);
     }
 }

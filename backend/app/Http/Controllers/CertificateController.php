@@ -10,16 +10,23 @@ class CertificateController extends Controller
 {
     public function generate(Request $request, $placementId)
     {
-        $placement = Placement::with(['student.user', 'company', 'companySupervisor.user', 'academicSupervisor.user', 'evaluations'])
-            ->findOrFail($placementId);
+        $placement = Placement::with([
+            'student.user',
+            'company',
+            'companySupervisor.user',
+            'academicSupervisor',
+            'evaluations',
+        ])->findOrFail($placementId);
 
-        // Ensure placement belongs to the student (unless accessed by an admin)
-        if ($request->user()->hasRole('student') && $placement->student->user_id !== $request->user()->id) {
-            return response()->json(['message' => 'Unauthorized'], 403);
+        $user = $request->user();
+        $isStudent   = ($placement->student?->user_id === $user->id);
+        $isInstAdmin = ($user->isInstitutionAdmin() && $placement->student?->institution_id === $user->institution_id);
+
+        if (!$user->isSuperAdmin() && !$isStudent && !$isInstAdmin) {
+            return response()->json(['message' => 'Forbidden. Unauthorized to access this certificate.'], 403);
         }
 
         // Check if placement is complete and evaluations are submitted
-        // In this simple system, we just check if it's completed and if there's at least one evaluation
         if ($placement->status !== 'completed' && $placement->evaluations->count() === 0) {
             return response()->json(['message' => 'Certificate not available yet. Attachment must be completed with evaluations.'], 403);
         }
@@ -36,17 +43,14 @@ class CertificateController extends Controller
             $finalScore = max($companyPercentage, $academicScore);
         }
 
-        // Create PDF
         $data = [
             'placement' => $placement,
-            'student' => $placement->student,
-            'company' => $placement->company,
-            'score' => round($finalScore, 1),
-            'date' => now()->format('F j, Y')
+            'student'   => $placement->student,
+            'company'   => $placement->company,
+            'score'     => round($finalScore, 1),
+            'date'      => now()->format('F j, Y'),
         ];
 
-        // In a real app, you would have a blade view for the certificate (e.g., pdf.certificate)
-        // Here we'll generate simple HTML for demonstration
         $html = "
             <h1 style='text-align:center;'>Certificate of Completion</h1>
             <p style='text-align:center;'>This is to certify that</p>

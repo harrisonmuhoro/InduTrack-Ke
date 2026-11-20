@@ -10,9 +10,14 @@ class FieldVisitController extends Controller
 {
     public function index(Request $request)
     {
-        $userId = $request->user()->id;
+        $user = $request->user();
+
+        if ($user->isSuperAdmin()) {
+            return response()->json(FieldVisit::with('placement.student.user', 'placement.company')->latest('visit_date')->get());
+        }
+
         $visits = FieldVisit::with('placement.student.user', 'placement.company')
-            ->where('academic_supervisor_id', $userId)
+            ->where('academic_supervisor_id', $user->id)
             ->latest('visit_date')
             ->get();
 
@@ -27,8 +32,16 @@ class FieldVisitController extends Controller
             'visit_time'    => 'nullable|date_format:H:i',
         ]);
 
+        $user = $request->user();
+        $placement = Placement::findOrFail($request->placement_id);
+
+        // Enforce assignment: only assigned academic supervisor or super admin
+        if (!$user->isSuperAdmin() && $placement->academic_supervisor_id !== $user->id) {
+            return response()->json(['message' => 'Forbidden. Only the assigned academic supervisor can schedule field visits.'], 403);
+        }
+
         $visit = FieldVisit::create([
-            'academic_supervisor_id' => $request->user()->id,
+            'academic_supervisor_id' => $user->id,
             'placement_id'           => $request->placement_id,
             'visit_date'             => $request->visit_date,
             'visit_time'             => $request->visit_time,
@@ -49,8 +62,12 @@ class FieldVisitController extends Controller
             'gps_longitude'               => 'nullable|string',
         ]);
 
-        $visit = FieldVisit::where('academic_supervisor_id', $request->user()->id)
-            ->findOrFail($id);
+        $user = $request->user();
+        $visit = FieldVisit::findOrFail($id);
+
+        if (!$user->isSuperAdmin() && $visit->academic_supervisor_id !== $user->id) {
+            return response()->json(['message' => 'Forbidden. Only the conducting academic supervisor can update this report.'], 403);
+        }
 
         $visit->update($request->only([
             'status', 'company_environment_notes',
@@ -63,9 +80,16 @@ class FieldVisitController extends Controller
 
     public function show(Request $request, $id)
     {
-        $visit = FieldVisit::with('placement.student.user', 'placement.company')
-            ->where('academic_supervisor_id', $request->user()->id)
-            ->findOrFail($id);
+        $visit = FieldVisit::with('placement.student.user', 'placement.company')->findOrFail($id);
+        $user = $request->user();
+
+        $isAcademic = ($visit->academic_supervisor_id === $user->id);
+        $isInstAdmin = ($user->isInstitutionAdmin() && $visit->placement?->student?->institution_id === $user->institution_id);
+
+        if (!$user->isSuperAdmin() && !$isAcademic && !$isInstAdmin) {
+            return response()->json(['message' => 'Forbidden.'], 403);
+        }
+
         return response()->json($visit);
     }
 }

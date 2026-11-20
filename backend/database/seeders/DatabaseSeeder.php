@@ -1057,12 +1057,21 @@ class DatabaseSeeder extends Seeder
     // ─────────────────────────────────────────────────────────────
     // HELPERS
     // ─────────────────────────────────────────────────────────────
-    private function createUser(string $name, string $email, int $roleId): \App\Models\User
+    private function createUser(string $name, string $email, int $roleId, ?int $institutionId = null): \App\Models\User
     {
         $user = \App\Models\User::firstOrCreate(
             ['email' => $email],
-            ['name' => $name, 'password' => $this->password, 'email_verified_at' => now()]
+            [
+                'name' => $name,
+                'password' => $this->password,
+                'email_verified_at' => now(),
+                'institution_id' => $institutionId,
+            ]
         );
+
+        if ($institutionId && $user->institution_id !== $institutionId) {
+            $user->update(['institution_id' => $institutionId]);
+        }
 
         DB::table('user_roles')->insertOrIgnore(['user_id' => $user->id, 'role_id' => $roleId]);
 

@@ -25,12 +25,30 @@ class EvaluationController extends Controller
             'score_communication' => 'required|integer|min:1|max:5',
             'remarks'             => 'nullable|string',
             'would_accept_again'  => 'required|boolean',
-            'evaluator_type'      => 'required|in:company_supervisor,academic_supervisor',
+            'evaluator_type'      => 'nullable|in:company_supervisor,academic_supervisor',
         ]);
+
+        $user = $request->user();
+        $placement = Placement::with(['student', 'companySupervisor'])->findOrFail($request->placement_id);
+
+        // Derive evaluator type strictly from authenticated user's assigned role on this placement
+        if ($user->isCompanySupervisor() && $placement->company_supervisor_id === $user->companySupervisor?->id) {
+            $evaluatorType = 'company_supervisor';
+        } elseif ($user->isAcademicSupervisor() && $placement->academic_supervisor_id === $user->id) {
+            $evaluatorType = 'academic_supervisor';
+        } elseif ($user->isSuperAdmin()) {
+            $evaluatorType = $request->evaluator_type ?? 'academic_supervisor';
+        } else {
+            return response()->json(['message' => 'Forbidden. You are not assigned as an evaluator for this placement.'], 403);
+        }
+
+        if (!in_array($placement->status, ['active', 'completed'])) {
+            return response()->json(['message' => 'Cannot evaluate a placement that is not active or completed.'], 422);
+        }
 
         // Prevent duplicate evaluations
         $existing = Evaluation::where('placement_id', $request->placement_id)
-            ->where('evaluator_id', $request->user()->id)
+            ->where('evaluator_id', $user->id)
             ->whereNotNull('submitted_at')
             ->first();
 
@@ -49,8 +67,8 @@ class EvaluationController extends Controller
 
         $evaluation = Evaluation::create([
             'placement_id'        => $request->placement_id,
-            'evaluator_id'        => $request->user()->id,
-            'evaluator_type'      => $request->evaluator_type,
+            'evaluator_id'        => $user->id,
+            'evaluator_type'      => $evaluatorType,
             'score_punctuality'   => $request->score_punctuality,
             'score_attitude'      => $request->score_attitude,
             'score_technical'     => $request->score_technical,
@@ -86,6 +104,18 @@ class EvaluationController extends Controller
      */
     public function forPlacement(Request $request, $placementId)
     {
+        $placement = Placement::with('student')->findOrFail($placementId);
+        $user = $request->user();
+
+        $isStudent = ($placement->student?->user_id === $user->id);
+        $isAcademic = ($placement->academic_supervisor_id === $user->id);
+        $isCompany = ($user->companySupervisor && $placement->company_supervisor_id === $user->companySupervisor->id);
+        $isInstAdmin = ($user->isInstitutionAdmin() && $placement->student?->institution_id === $user->institution_id);
+
+        if (!$user->isSuperAdmin() && !$isStudent && !$isAcademic && !$isCompany && !$isInstAdmin) {
+            return response()->json(['message' => 'Forbidden. Cannot view evaluations for this placement.'], 403);
+        }
+
         $evaluations = Evaluation::with('evaluator')
             ->where('placement_id', $placementId)
             ->whereNotNull('submitted_at')
@@ -105,9 +135,26 @@ class EvaluationController extends Controller
             'is_anonymous'=> 'nullable|boolean',
         ]);
 
+        $user = $request->user();
+
+        if (!$user->isSuperAdmin()) {
+            $student = Student::where('user_id', $user->id)->first();
+            if (!$student) {
+                return response()->json(['message' => 'Forbidden. Only attached students can rate companies.'], 403);
+            }
+
+            $hasPlacement = Placement::where('student_id', $student->id)
+                ->where('company_id', $companyId)
+                ->exists();
+
+            if (!$hasPlacement) {
+                return response()->json(['message' => 'Forbidden. You can only rate companies where you have had a placement.'], 403);
+            }
+        }
+
         $rating = CompanyRating::create([
             'company_id'   => $companyId,
-            'rater_id'     => $request->user()->id,
+            'rater_id'     => $user->id,
             'rating'       => $request->rating,
             'feedback'     => $request->feedback,
             'is_anonymous' => $request->is_anonymous ?? false,
