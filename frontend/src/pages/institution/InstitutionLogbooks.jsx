@@ -131,14 +131,14 @@ export default function InstitutionLogbooks() {
                 </div>
             </div>
 
-            {/* Active Placements & Student Logbook Review Table */}
+            {/* Active Placements & Student Logbook Records Table */}
             <div className="bg-white p-6 rounded-xl border border-border shadow-sm">
                 <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
                     <FileText size={20} className="text-primary" />
-                    Student Logbook Records & Academic Review Queue
+                    Student Logbook Records
                 </h3>
                 <p className="text-sm text-gray-500 mb-6">
-                    Inspect weekly submissions, lock status, and supervisor comments across active attachments within your institution.
+                    Inspect weekly submissions, lock status, review decisions, and supervisor comments across active attachments within your institution. Formal academic decisions are completed by assigned academic supervisors.
                 </p>
 
                 {loading ? (
@@ -271,6 +271,21 @@ export default function InstitutionLogbooks() {
                                                 {entry.comments.map((c) => (
                                                     <p key={c.id} className="text-gray-600 bg-white p-2 rounded border">
                                                         <span className="font-semibold text-gray-800">{c.user?.name}:</span> {c.comment}
+                                                    </p>
+                                                ))}
+                                            </div>
+                                        )}
+
+                                        {entry.review_history?.length > 0 && (
+                                            <div className="mt-3 pt-2 border-t text-xs space-y-1">
+                                                <p className="font-bold text-gray-700">Review history:</p>
+                                                {entry.review_history.map((review) => (
+                                                    <p key={review.id} className="text-gray-600 bg-white p-2 rounded border">
+                                                        <span className="font-semibold text-gray-800">
+                                                            {review.reviewer?.name || 'System'}
+                                                        </span>{' '}
+                                                        changed {review.previous_status} to {review.new_status}
+                                                        {review.comment ? ` — ${review.comment}` : ''}
                                                     </p>
                                                 ))}
                                             </div>

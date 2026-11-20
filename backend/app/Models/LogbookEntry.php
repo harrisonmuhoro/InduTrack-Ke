@@ -33,10 +33,15 @@ class LogbookEntry extends Model
         return $this->belongsTo(User::class, 'reviewed_by');
     }
 
+    public function reviewHistory()
+    {
+        return $this->hasMany(LogbookReviewHistory::class, 'logbook_entry_id')->orderBy('reviewed_at');
+    }
+
     /**
      * An entry is editable if:
      * 1. locked_at is null.
-     * 2. Status is not 'approved' or 'rejected'.
+     * 2. Status is not finalized or awaiting a controlled review outcome.
      * 3. Created within 72 hours.
      */
     public function isEditable(): bool
@@ -45,7 +50,7 @@ class LogbookEntry extends Model
             return false;
         }
 
-        if (in_array($this->status, ['approved', 'rejected'])) {
+        if (in_array($this->status, ['approved', 'rejected', 'flagged'])) {
             return false;
         }
 

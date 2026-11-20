@@ -9,6 +9,9 @@ use Illuminate\Http\Request;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Support\Facades\DB;
+use App\Models\LogbookReviewHistory;
+use App\Services\LogbookLockService;
 
 class LogbookController extends Controller
 {
@@ -134,6 +137,34 @@ class LogbookController extends Controller
         return response()->json(['message' => 'Logbook entry submitted successfully.', 'entry' => $entry]);
     }
 
+    /** Move a rejected entry back to draft so the student can correct and resubmit it. */
+    public function resubmit(Request $request, $id)
+    {
+        $entry = LogbookEntry::with('placement.student')->findOrFail($id);
+        $this->authorize('resubmit', $entry);
+
+        DB::transaction(function () use ($entry, $request) {
+            LogbookReviewHistory::create([
+                'logbook_entry_id' => $entry->id,
+                'reviewer_id' => $request->user()->id,
+                'previous_status' => $entry->status,
+                'new_status' => 'draft',
+                'comment' => 'Student reopened the rejected entry for correction.',
+                'metadata' => ['ip' => $request->ip(), 'user_agent' => $request->userAgent()],
+                'reviewed_at' => now(),
+            ]);
+
+            $entry->update([
+                'status' => 'draft',
+                'submitted_at' => null,
+                'reviewed_by' => null,
+                'reviewed_at' => null,
+            ]);
+        });
+
+        return response()->json(['message' => 'Rejected entry reopened as a draft.', 'entry' => $entry->fresh()]);
+    }
+
     /**
      * Get entries for the active student placement.
      */
@@ -151,7 +182,7 @@ class LogbookController extends Controller
         }
 
         $entries = $placement->logbookEntries()
-            ->with(['comments.user:id,name', 'reviewer:id,name'])
+            ->with(['comments.user:id,name', 'reviewer:id,name', 'reviewHistory.reviewer:id,name'])
             ->orderBy('week_number')
             ->get()
             ->map(function ($entry) {
@@ -202,30 +233,43 @@ class LogbookController extends Controller
         // Enforce policy authorization (LogbookEntryPolicy::review)
         $this->authorize('review', $entry);
 
-        // Must be in submitted or flagged state to be reviewed
-        // An approved or rejected entry cannot be arbitrarily flipped
-        if ($entry->status === 'draft') {
-            return response()->json(['message' => 'Cannot review a draft logbook entry. The student must submit it first.'], 422);
+        $allowedTransitions = [
+            'submitted' => ['approved', 'rejected', 'flagged'],
+            'flagged' => ['approved', 'rejected'],
+        ];
+        if (! in_array($request->action, $allowedTransitions[$entry->status] ?? [], true)) {
+            return response()->json([
+                'message' => "Cannot transition a {$entry->status} entry to {$request->action}.",
+            ], 422);
         }
 
-        if ($entry->status === 'approved') {
-            return response()->json(['message' => 'This logbook entry has already been approved and cannot be altered.'], 422);
-        }
-
-        $entry->update([
-            'status'      => $request->action,
-            'reviewed_by' => $user->id,
-            'reviewed_at' => now(),
-        ]);
-
-        if ($request->comment) {
-            $entry->comments()->create([
-                'user_id' => $user->id,
-                'comment' => "[{$request->action}] " . $request->comment,
+        DB::transaction(function () use ($entry, $user, $request) {
+            $reviewedAt = now();
+            LogbookReviewHistory::create([
+                'logbook_entry_id' => $entry->id,
+                'reviewer_id' => $user->id,
+                'previous_status' => $entry->status,
+                'new_status' => $request->action,
+                'comment' => $request->comment,
+                'metadata' => ['ip' => $request->ip(), 'user_agent' => $request->userAgent()],
+                'reviewed_at' => $reviewedAt,
             ]);
-        }
 
-        return response()->json($entry->load(['comments.user:id,name', 'reviewer:id,name']));
+            $entry->update([
+                'status' => $request->action,
+                'reviewed_by' => $user->id,
+                'reviewed_at' => $reviewedAt,
+            ]);
+
+            if ($request->comment) {
+                $entry->comments()->create([
+                    'user_id' => $user->id,
+                    'comment' => "[{$request->action}] " . $request->comment,
+                ]);
+            }
+        });
+
+        return response()->json($entry->fresh()->load(['comments.user:id,name', 'reviewer:id,name', 'reviewHistory.reviewer:id,name']));
     }
 
     /**
@@ -248,17 +292,6 @@ class LogbookController extends Controller
      */
     public function lockExpiredEntries(): int
     {
-        $cutoff = now()->subHours(72);
-        $entries = LogbookEntry::whereNull('locked_at')
-            ->where('created_at', '<=', $cutoff)
-            ->get();
-
-        $count = 0;
-        foreach ($entries as $entry) {
-            $entry->lock('Automatically locked after 72 hours');
-            $count++;
-        }
-
-        return $count;
+        return app(LogbookLockService::class)->lockExpiredEntries();
     }
 }

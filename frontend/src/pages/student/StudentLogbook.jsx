@@ -95,7 +95,11 @@ export default function StudentLogbook() {
     const totalWeeks = placement?.period?.required_weeks || 16;
     const completedWeeks = useMemo(() => new Set(entries.map((e) => e.week_number)), [entries]);
     const maxWeek = entries.length ? Math.max(...entries.map((e) => e.week_number)) : 0;
-    const currentWeek = Math.min(maxWeek + 1, totalWeeks);
+    const rejectedEntry = useMemo(
+        () => [...entries].filter((entry) => entry.status === 'rejected').sort((a, b) => b.week_number - a.week_number)[0],
+        [entries]
+    );
+    const currentWeek = rejectedEntry?.week_number || Math.min(maxWeek + 1, totalWeeks);
     const progressPct = totalWeeks > 0 ? Math.min(100, Math.round((completedWeeks.size / totalWeeks) * 100)) : 0;
 
     const currentEntry = entries.find((e) => e.week_number === currentWeek);
@@ -130,6 +134,20 @@ export default function StudentLogbook() {
     const dateRange = weekDateRange(placement?.period?.start_date, currentWeek);
 
     const setField = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
+
+    const handleResubmit = async (entry) => {
+        setSaving(true);
+        setFeedbackMsg(null);
+        try {
+            await api.post(`/logbooks/${entry.id}/resubmit`);
+            setFeedbackMsg({ type: 'success', text: `Week ${entry.week_number} reopened. Correct the entry and submit it again.` });
+            await loadData();
+        } catch (err) {
+            setFeedbackMsg({ type: 'error', text: err.response?.data?.message || 'Unable to reopen this rejected entry.' });
+        } finally {
+            setSaving(false);
+        }
+    };
 
     const handleSave = async (submitting) => {
         setFeedbackMsg(null);
@@ -377,6 +395,11 @@ export default function StudentLogbook() {
 <div className="mt-3 flex items-center gap-2">
 <span className="px-2 py-0.5 bg-primary text-white text-[10px] font-bold rounded-full">{(entry.status || 'reviewed').toUpperCase()}</span>
 <span className="text-[10px] text-outline">Published {timeAgo(comment?.created_at)}</span>
+{entry.status === 'rejected' && (
+<button className="ml-auto px-2 py-1 bg-error text-white rounded text-[10px] font-bold" disabled={saving} onClick={() => handleResubmit(entry)} type="button">
+    Reopen for correction
+</button>
+)}
 </div>
 </>
 )}

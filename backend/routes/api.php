@@ -89,6 +89,7 @@ Route::middleware(['auth:sanctum', 'throttle:60,1'])->group(function () {
         Route::post('/logbooks',              [LogbookController::class, 'store']);
         Route::put('/logbooks/{id}',          [LogbookController::class, 'update']);
         Route::post('/logbooks/{id}/submit',  [LogbookController::class, 'submit']);
+        Route::post('/logbooks/{id}/resubmit', [LogbookController::class, 'resubmit']);
 
         // Company Rating (Student submits review for their completed attachment)
         Route::post('/companies/{companyId}/rate', [EvaluationController::class, 'rateCompany']);
@@ -119,12 +120,16 @@ Route::middleware(['auth:sanctum', 'throttle:60,1'])->group(function () {
 
         // Logbook Review & Academic Grading
         Route::post('/logbooks/{entryId}/comments',    [LogbookController::class, 'addComment']);
-        Route::post('/logbooks/{entryId}/review',      [LogbookController::class, 'reviewEntry']);
-        Route::post('/placements/{placementId}/grade', [LogbookController::class, 'grade']);
 
         // Final Evaluations
         Route::post('/evaluations',                         [EvaluationController::class, 'store']);
         Route::get('/evaluations/placement/{placementId}',  [EvaluationController::class, 'forPlacement']);
+    });
+
+    // Formal academic logbook decisions belong to assigned academic supervisors.
+    Route::middleware('role:academic_supervisor,institution_supervisor,super_admin')->group(function () {
+        Route::post('/logbooks/{entryId}/review',      [LogbookController::class, 'reviewEntry']);
+        Route::post('/placements/{placementId}/grade', [LogbookController::class, 'grade']);
     });
 
     // Field Visits: academic supervisors only (and super_admin)

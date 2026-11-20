@@ -145,6 +145,10 @@ class AuthorizationTest extends TestCase
         $johnPlacement = Placement::whereHas('student.user', fn($q) => $q->where('email', 'john.doe@student.uonbi.ac.ke'))->first();
         $johnLogbookEntry = LogbookEntry::where('placement_id', $johnPlacement->id)->first();
         $this->assertNotNull($johnLogbookEntry);
+        // The state machine only permits decisions from submitted/flagged entries.
+        // Normalize the seeded fixture so this authorization test exercises access,
+        // rather than depending on whichever review status the seed data carries.
+        $johnLogbookEntry->update(['status' => 'submitted']);
 
         // Dr. Wanjiku (not assigned to John) tries to review John's logbook entry -> 403 Forbidden
         Sanctum::actingAs($drWanjiku);

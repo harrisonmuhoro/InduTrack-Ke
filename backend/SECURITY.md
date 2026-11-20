@@ -92,6 +92,26 @@ reviewed, but this matrix does not claim exhaustive endpoint-level test coverage
 
 ## Database and operational limits
 
+## Logbook review integrity
+
+- Formal logbook decisions use an explicit state machine: `submitted` may become
+  `approved`, `rejected`, or `flagged`; a `flagged` entry may become `approved` or
+  `rejected`; finalized entries cannot be changed arbitrarily.
+- Only the assigned academic supervisor (or super admin) may approve, reject, or
+  flag an entry. Company supervisors may still provide comments and weekly
+  performance feedback, but cannot make the academic decision.
+- Every decision and rejected-entry reopening creates an immutable
+  `logbook_review_histories` row containing the prior/new status, actor, comment,
+  timestamp, and request metadata. The current entry fields are a convenient
+  summary, not the audit trail.
+- `logbooks:lock` delegates to `LogbookLockService`; the scheduler invokes the
+  command hourly. Production must run Laravel's scheduler worker/cron for that
+  schedule to execute.
+
+Before deploying the review-history migration, take the normal database backup and
+confirm the migration ledger. The migration adds history only; it does not infer or
+reconstruct decisions that occurred before deployment.
+
 - Role compatibility is application-level alias resolution. Existing legacy role rows
   are intentionally not deleted or merged, preserving role IDs and assignments. Their
   permissions continue to be evaluated from the assigned role row.
@@ -110,6 +130,8 @@ reviewed, but this matrix does not claim exhaustive endpoint-level test coverage
   export or otherwise preserve those values first if they must survive rollback.
 - Database rollback removes the index only. Manual duplicate reconciliation requires
   a separate, auditable backup and decision record.
-- Full suite and route checks were blocked in this checkout because PHP reports the
-  repository's `backend/bootstrap/cache` directory as non-writable, preventing Laravel
-  from generating its package/provider manifests. No production migration was run.
+- Local focused verification: 38 tests passed, 130 assertions. Frontend `npm run
+  lint` and `npm run build` both complete successfully; lint currently reports
+  pre-existing warnings. The GitHub workflow now runs both backend tests and frontend
+  lint/build, but branch protection and required-check enforcement remain repository
+  settings that must be enabled by an authorized GitHub administrator.

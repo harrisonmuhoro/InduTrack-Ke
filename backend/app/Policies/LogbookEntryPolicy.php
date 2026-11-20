@@ -72,12 +72,14 @@ class LogbookEntryPolicy
             return true;
         }
 
-        // Assigned company supervisor
-        if ($user->isCompanySupervisor() && $placement->company_supervisor_id === $user->companySupervisor?->id) {
-            return true;
-        }
-
         return false;
+    }
+
+    public function resubmit(User $user, LogbookEntry $entry): bool
+    {
+        return $entry->status === 'rejected'
+            && $entry->locked_at === null
+            && $entry->placement?->student?->user_id === $user->id;
     }
 
     public function addComment(User $user, LogbookEntry $entry): bool

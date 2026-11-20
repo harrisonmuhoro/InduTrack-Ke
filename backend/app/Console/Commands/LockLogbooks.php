@@ -3,7 +3,7 @@
 namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
-use App\Http\Controllers\LogbookController;
+use App\Services\LogbookLockService;
 
 class LockLogbooks extends Command
 {
@@ -24,10 +24,10 @@ class LockLogbooks extends Command
     /**
      * Execute the console command.
      */
-    public function handle(LogbookController $controller)
+    public function handle(LogbookLockService $locker)
     {
         $this->info('Locking expired logbook entries...');
-        $count = $controller->lockExpiredEntries();
+        $count = $locker->lockExpiredEntries();
         $this->info("Successfully locked {$count} logbook entries.");
     }
 }

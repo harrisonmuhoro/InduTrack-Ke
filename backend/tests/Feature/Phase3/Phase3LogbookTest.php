@@ -302,4 +302,51 @@ class Phase3LogbookTest extends TestCase
         $this->assertNotNull($expiredEntry->locked_at);
         $this->assertEquals('Automatically locked after 72 hours', $expiredEntry->lock_reason);
     }
+
+    public function test_rejected_entry_can_be_reopened_and_each_decision_is_immutable(): void
+    {
+        $john = User::where('email', 'john.doe@student.uonbi.ac.ke')->first();
+        $alan = User::where('email', 'supervisor@uonbi.ac.ke')->first();
+        $placement = Placement::whereHas('student.user', fn($q) => $q->where('email', $john->email))->first();
+        $entry = LogbookEntry::create([
+            'placement_id' => $placement->id,
+            'entry_date' => now()->toDateString(),
+            'week_number' => 26,
+            'activities' => 'Initial submission',
+            'status' => 'submitted',
+        ]);
+
+        Sanctum::actingAs($alan);
+        $this->postJson("/api/logbooks/{$entry->id}/review", ['action' => 'rejected', 'comment' => 'Please correct this.'])
+            ->assertStatus(200);
+
+        Sanctum::actingAs($john);
+        $this->postJson("/api/logbooks/{$entry->id}/resubmit")->assertStatus(200);
+        $this->postJson("/api/logbooks/{$entry->id}/submit")->assertStatus(200);
+
+        Sanctum::actingAs($alan);
+        $this->postJson("/api/logbooks/{$entry->id}/review", ['action' => 'approved'])->assertStatus(200);
+
+        $this->assertDatabaseCount('logbook_review_histories', 3);
+        $this->assertDatabaseHas('logbook_review_histories', ['previous_status' => 'submitted', 'new_status' => 'rejected']);
+        $this->assertDatabaseHas('logbook_review_histories', ['previous_status' => 'rejected', 'new_status' => 'draft']);
+        $this->assertDatabaseHas('logbook_review_histories', ['previous_status' => 'submitted', 'new_status' => 'approved']);
+    }
+
+    public function test_company_supervisor_cannot_make_formal_academic_decision(): void
+    {
+        $companySupervisor = User::where('email', 'jane.smith@safaricom.co.ke')->first();
+        $placement = Placement::whereHas('student.user', fn($q) => $q->where('email', 'john.doe@student.uonbi.ac.ke'))->first();
+        $entry = LogbookEntry::create([
+            'placement_id' => $placement->id,
+            'entry_date' => now()->toDateString(),
+            'week_number' => 27,
+            'activities' => 'Awaiting academic review',
+            'status' => 'submitted',
+        ]);
+
+        Sanctum::actingAs($companySupervisor);
+        $this->postJson("/api/logbooks/{$entry->id}/review", ['action' => 'approved'])->assertStatus(403);
+        $this->assertDatabaseCount('logbook_review_histories', 0);
+    }
 }
