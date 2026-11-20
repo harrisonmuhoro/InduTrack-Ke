@@ -55,10 +55,8 @@ class SupervisorController extends Controller
             'logbookEntries.comments.user',
         ])->findOrFail($placementId);
 
-        // Enforce policy authorization
-        if (Gate::denies('view', $placement)) {
-            return response()->json(['message' => 'Forbidden. You are not assigned to supervise this placement.'], 403);
-        }
+        // Enforce policy authorization (PlacementPolicy::view)
+        $this->authorize('view', $placement);
 
         return response()->json($placement);
     }
@@ -81,17 +79,28 @@ class SupervisorController extends Controller
         ]);
 
         $user = $request->user();
+        $placement = Placement::findOrFail($request->placement_id);
+
+        // Explicit active placement validation
+        if (!in_array($placement->status, ['active', 'completed'])) {
+            return response()->json(['message' => 'Cannot submit performance log for a non-active placement.'], 422);
+        }
+
         $supervisor = CompanySupervisor::where('user_id', $user->id)->first();
 
         if (!$supervisor && !$user->isSuperAdmin()) {
             return response()->json(['message' => 'Forbidden. Only company supervisors can submit weekly performance logs.'], 403);
         }
 
-        $placement = Placement::findOrFail($request->placement_id);
-
         // Enforce supervisor assignment
-        if (!$user->isSuperAdmin() && $placement->company_supervisor_id !== $supervisor->id) {
+        if (!$user->isSuperAdmin() && $placement->company_supervisor_id !== $supervisor?->id) {
             return response()->json(['message' => 'Forbidden. You are not the assigned company supervisor for this placement.'], 403);
+        }
+
+        // Fallback for superadmin: resolve the company supervisor ID assigned to this placement
+        $resolvedSupervisorId = $supervisor ? $supervisor->id : $placement->company_supervisor_id;
+        if (!$resolvedSupervisorId) {
+            return response()->json(['message' => 'Cannot submit weekly log: placement has no assigned company supervisor.'], 422);
         }
 
         // Prevent duplicate weekly log
@@ -104,10 +113,10 @@ class SupervisorController extends Controller
         }
 
         try {
-            $log = DB::transaction(function () use ($request, $user, $supervisor, $placement) {
+            $log = DB::transaction(function () use ($request, $user, $resolvedSupervisorId, $placement) {
                 $weeklyLog = WeeklyLog::create([
                     'placement_id'          => $request->placement_id,
-                    'company_supervisor_id' => $supervisor ? $supervisor->id : $placement->company_supervisor_id,
+                    'company_supervisor_id' => $resolvedSupervisorId,
                     'week_number'           => $request->week_number,
                     'tasks_assigned'        => $request->tasks_assigned,
                     'tasks_completed'       => $request->tasks_completed,

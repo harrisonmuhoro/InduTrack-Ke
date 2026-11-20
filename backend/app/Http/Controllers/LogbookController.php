@@ -84,11 +84,11 @@ class LogbookController extends Controller
 
         // Enforce policy authorization (owner student and within editable 72h window)
         if (Gate::denies('update', $entry)) {
-            $reason = $entry->locked_at ? 'Entry is locked.' : 'Editing window (72 hours) has expired.';
+            $reason = $entry->locked_at ? 'Entry is locked.' : 'Editing window (72 hours) has expired or entry is already approved.';
             return response()->json(['message' => "Forbidden. {$reason}"], 403);
         }
 
-        $validated = $request->validate([
+        $request->validate([
             'activities'      => 'sometimes|required|string',
             'lessons_learned' => 'nullable|string',
             'challenges'      => 'nullable|string',
@@ -119,11 +119,15 @@ class LogbookController extends Controller
         $entry = LogbookEntry::with('placement.student')->findOrFail($id);
 
         if (Gate::denies('update', $entry)) {
-            return response()->json(['message' => 'Forbidden. Logbook entry cannot be submitted because it is locked or not owned.'], 403);
+            return response()->json(['message' => 'Forbidden. Logbook entry cannot be submitted because it is locked, approved, or not owned.'], 403);
+        }
+
+        if ($entry->status === 'submitted') {
+            return response()->json(['message' => 'Logbook entry is already submitted.', 'entry' => $entry]);
         }
 
         $entry->update([
-            'status' => 'submitted',
+            'status'       => 'submitted',
             'submitted_at' => now(),
         ]);
 
@@ -147,7 +151,7 @@ class LogbookController extends Controller
         }
 
         $entries = $placement->logbookEntries()
-            ->with(['comments.user:id,name'])
+            ->with(['comments.user:id,name', 'reviewer:id,name'])
             ->orderBy('week_number')
             ->get()
             ->map(function ($entry) {
@@ -169,10 +173,8 @@ class LogbookController extends Controller
         $entry = LogbookEntry::with('placement.student')->findOrFail($entryId);
         $user = $request->user();
 
-        // Enforce policy authorization
-        if (Gate::denies('addComment', $entry)) {
-            return response()->json(['message' => 'Forbidden. You are not authorized to comment on this logbook.'], 403);
-        }
+        // Enforce policy authorization (LogbookEntryPolicy::addComment)
+        $this->authorize('addComment', $entry);
 
         $comment = $entry->comments()->create([
             'user_id' => $user->id,
@@ -185,6 +187,7 @@ class LogbookController extends Controller
     /**
      * Explicit review action: approved, rejected, flagged.
      * Only assigned supervisors may execute this formal action.
+     * Enforces valid state transitions and records reviewer ID + timestamp.
      */
     public function reviewEntry(Request $request, $entryId)
     {
@@ -196,13 +199,23 @@ class LogbookController extends Controller
         $entry = LogbookEntry::with('placement')->findOrFail($entryId);
         $user = $request->user();
 
-        // Enforce policy authorization
-        if (Gate::denies('review', $entry)) {
-            return response()->json(['message' => 'Forbidden. Only assigned supervisors can review this logbook entry.'], 403);
+        // Enforce policy authorization (LogbookEntryPolicy::review)
+        $this->authorize('review', $entry);
+
+        // Must be in submitted or flagged state to be reviewed
+        // An approved or rejected entry cannot be arbitrarily flipped
+        if ($entry->status === 'draft') {
+            return response()->json(['message' => 'Cannot review a draft logbook entry. The student must submit it first.'], 422);
+        }
+
+        if ($entry->status === 'approved') {
+            return response()->json(['message' => 'This logbook entry has already been approved and cannot be altered.'], 422);
         }
 
         $entry->update([
-            'status' => $request->action,
+            'status'      => $request->action,
+            'reviewed_by' => $user->id,
+            'reviewed_at' => now(),
         ]);
 
         if ($request->comment) {
@@ -212,7 +225,7 @@ class LogbookController extends Controller
             ]);
         }
 
-        return response()->json($entry->load('comments.user:id,name'));
+        return response()->json($entry->load(['comments.user:id,name', 'reviewer:id,name']));
     }
 
     /**
@@ -223,10 +236,8 @@ class LogbookController extends Controller
         $request->validate(['grade' => 'required|numeric|min:0|max:100']);
         $placement = Placement::with('student')->findOrFail($placementId);
 
-        // Enforce policy: only assigned academic supervisor may grade
-        if (Gate::denies('grade', $placement)) {
-            return response()->json(['message' => 'Forbidden. Only the assigned academic supervisor can submit grades.'], 403);
-        }
+        // Enforce policy: only assigned academic supervisor may grade (PlacementPolicy::grade)
+        $this->authorize('grade', $placement);
 
         $placement->update(['academic_grade' => $request->grade]);
         return response()->json(['message' => 'Grade recorded for placement ' . $placementId, 'placement' => $placement]);

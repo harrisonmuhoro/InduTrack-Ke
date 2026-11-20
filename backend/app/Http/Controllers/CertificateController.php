@@ -19,17 +19,8 @@ class CertificateController extends Controller
             'evaluations',
         ])->findOrFail($placementId);
 
-        $user = $request->user();
-
         // Authorization: student owner, institution admin of student's institution, or superadmin
-        $isStudent   = ($placement->student?->user_id === $user->id);
-        $isInstAdmin = ($user->isInstitutionAdmin()
-            && $user->institution_id
-            && (int) $placement->student?->institution_id === (int) $user->institution_id);
-
-        if (!$user->isSuperAdmin() && !$isStudent && !$isInstAdmin) {
-            return response()->json(['message' => 'Forbidden. Unauthorized to access this certificate.'], 403);
-        }
+        $this->authorize('certificate', $placement);
 
         // ── Remediation C: Strict certificate eligibility ──────────────────────
         // Reject if placement is not completed

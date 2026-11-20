@@ -143,6 +143,7 @@ export default function StudentLogbook() {
         }
         setSaving(true);
         try {
+            let entryId = currentEntry?.id;
             if (currentEntry) {
                 await api.put(`/logbooks/${currentEntry.id}`, {
                     activities: form.activities,
@@ -151,19 +152,26 @@ export default function StudentLogbook() {
                     plan_next_week: form.plan_next_week || null,
                 });
             } else {
-                await api.post('/logbooks', {
+                const res = await api.post('/logbooks', {
                     entry_date: new Date().toISOString().slice(0, 10),
                     week_number: currentWeek,
                     activities: form.activities,
                     lessons_learned: form.lessons_learned || null,
                     challenges: form.challenges || null,
                     plan_next_week: form.plan_next_week || null,
+                    status: submitting ? 'submitted' : 'draft',
                 });
+                entryId = res.data?.id;
             }
+
+            if (submitting && entryId && currentEntry?.status !== 'submitted') {
+                await api.post(`/logbooks/${entryId}/submit`);
+            }
+
             setFeedbackMsg({
                 type: 'success',
                 text: submitting
-                    ? `Week ${currentWeek} entry submitted successfully. It will lock 72 hours after creation.`
+                    ? `Week ${currentWeek} entry submitted successfully. It is now awaiting supervisor review.`
                     : `Week ${currentWeek} draft saved successfully.`,
             });
             await loadData();

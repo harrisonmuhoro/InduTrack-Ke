@@ -77,9 +77,7 @@ class DocumentController extends Controller
         $doc = Document::findOrFail($id);
 
         // Enforce policy authorization
-        if (Gate::denies('download', $doc)) {
-            return response()->json(['message' => 'Unauthorized'], 403);
-        }
+        $this->authorize('download', $doc);
 
         if (!Storage::disk('local')->exists($doc->file_path)) {
             return response()->json(['message' => 'File not found'], 404);
@@ -99,9 +97,7 @@ class DocumentController extends Controller
         $doc = Document::findOrFail($id);
 
         // Enforce policy authorization
-        if (Gate::denies('review', $doc)) {
-            return response()->json(['message' => 'Forbidden'], 403);
-        }
+        $this->authorize('review', $doc);
 
         $doc->update([
             'status'           => $request->status,
@@ -113,13 +109,17 @@ class DocumentController extends Controller
         return response()->json($doc);
     }
 
-    // Admin: list all pending documents
+    // Admin: list all pending documents scoped to institution
     public function pendingDocuments(Request $request)
     {
-        $docs = Document::with('student.user')
-            ->where('status', 'pending')
-            ->latest()
-            ->get();
-        return response()->json($docs);
+        $user = $request->user();
+        $query = Document::with('student.user')
+            ->where('status', 'pending');
+
+        if (!$user->isSuperAdmin()) {
+            $query->whereHas('student', fn ($q) => $q->where('institution_id', $user->institution_id));
+        }
+
+        return response()->json($query->latest()->get());
     }
 }

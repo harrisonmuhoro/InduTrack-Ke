@@ -160,4 +160,56 @@ class Phase3SupervisionTest extends TestCase
 
         $response->assertStatus(403);
     }
+
+    /**
+     * Test 7: Field visit GPS validation and terminal state transitions.
+     */
+    public function test_field_visit_gps_validation_and_terminal_state_transitions(): void
+    {
+        $alan = User::where('email', 'supervisor@uonbi.ac.ke')->first();
+        $johnPlacement = Placement::whereHas('student.user', fn($q) => $q->where('email', 'john.doe@student.uonbi.ac.ke'))->first();
+
+        Sanctum::actingAs($alan);
+        $visit = FieldVisit::create([
+            'academic_supervisor_id' => $alan->id,
+            'placement_id'           => $johnPlacement->id,
+            'visit_date'             => now()->toDateString(),
+            'status'                 => 'scheduled',
+        ]);
+
+        // Out-of-bounds latitude (must be between -90 and 90)
+        $invalidGpsRes = $this->putJson("/api/field-visits/{$visit->id}", [
+            'gps_latitude'  => 120.5,
+            'gps_longitude' => 36.8,
+        ]);
+        $invalidGpsRes->assertStatus(422);
+
+        // Mark visit as completed
+        $completeRes = $this->putJson("/api/field-visits/{$visit->id}", [
+            'status'        => 'completed',
+            'gps_latitude'  => -1.286389,
+            'gps_longitude' => 36.817223,
+        ]);
+        $completeRes->assertStatus(200);
+
+        // Attempting to alter a completed visit to scheduled must be rejected with 422
+        $alterRes = $this->putJson("/api/field-visits/{$visit->id}", [
+            'status' => 'scheduled',
+        ]);
+        $alterRes->assertStatus(422);
+    }
+
+    /**
+     * Test 8: Institution admin can inspect logbooks for their institution's placements.
+     */
+    public function test_institution_admin_can_inspect_logbook_for_their_placement(): void
+    {
+        $uonAdmin = User::where('email', 'admin@uonbi.ac.ke')->first();
+        $johnPlacement = Placement::whereHas('student.user', fn($q) => $q->where('email', 'john.doe@student.uonbi.ac.ke'))->first();
+
+        Sanctum::actingAs($uonAdmin);
+        $res = $this->getJson("/api/admin/placements/{$johnPlacement->id}/logbook");
+        $res->assertStatus(200);
+        $this->assertEquals($johnPlacement->id, $res->json('id'));
+    }
 }

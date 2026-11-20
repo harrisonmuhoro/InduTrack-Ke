@@ -12,6 +12,7 @@ class MessageController extends Controller
 {
     /**
      * Check if sender and receiver have an authorized messaging relationship:
+     * - Self-messaging is ALWAYS prohibited first.
      * - Super Admin can communicate with anyone.
      * - Student ↔ Assigned Company Supervisor on active placement.
      * - Student ↔ Assigned Academic Supervisor on active placement.
@@ -20,16 +21,17 @@ class MessageController extends Controller
      */
     private function canCommunicate(User $sender, User $receiver): bool
     {
-        if ($sender->isSuperAdmin() || $receiver->isSuperAdmin()) {
-            return true;
-        }
-
-        // Cannot message oneself
+        // 1. Self-messaging is strictly prohibited (even for superadmin)
         if ($sender->id === $receiver->id) {
             return false;
         }
 
-        // Student communication
+        // 2. Super Admin check
+        if ($sender->isSuperAdmin() || $receiver->isSuperAdmin()) {
+            return true;
+        }
+
+        // 3. Student communication
         if ($sender->isStudent()) {
             return $this->isStudentAuthorizedWith($sender, $receiver);
         }
@@ -38,7 +40,7 @@ class MessageController extends Controller
             return $this->isStudentAuthorizedWith($receiver, $sender);
         }
 
-        // Academic Supervisor & Institution Admin communication (same institution)
+        // 4. Academic Supervisor & Institution Admin communication (same institution)
         if (($sender->isAcademicSupervisor() && $receiver->isInstitutionAdmin()) ||
             ($sender->isInstitutionAdmin() && $receiver->isAcademicSupervisor())) {
             return $sender->institution_id && ($sender->institution_id === $receiver->institution_id);
@@ -59,8 +61,11 @@ class MessageController extends Controller
             return true;
         }
 
-        // Check active/completed placements for assigned supervisors
-        $placements = Placement::where('student_id', $student->id)->get();
+        // Scoped STRICTLY to active or completed placements (not cancelled/terminated)
+        $placements = Placement::where('student_id', $student->id)
+            ->whereIn('status', ['active', 'completed'])
+            ->get();
+
         foreach ($placements as $placement) {
             // Academic supervisor
             if ($otherUser->isAcademicSupervisor() && $placement->academic_supervisor_id === $otherUser->id) {
@@ -78,11 +83,13 @@ class MessageController extends Controller
     }
 
     /**
-     * Get all conversations (threads) for the current user.
+     * Get all active authorized conversations (threads) for the current user.
+     * Old unauthorized conversation summaries are excluded.
      */
     public function conversations(Request $request)
     {
-        $userId = $request->user()->id;
+        $user = $request->user();
+        $userId = $user->id;
 
         $conversations = Message::with('sender:id,name', 'receiver:id,name')
             ->where(function ($q) use ($userId) {
@@ -92,6 +99,10 @@ class MessageController extends Controller
             ->get()
             ->groupBy(function ($msg) use ($userId) {
                 return $msg->sender_id === $userId ? $msg->receiver_id : $msg->sender_id;
+            })
+            ->filter(function ($msgs, $partnerId) use ($user) {
+                $partner = User::find($partnerId);
+                return $partner && $this->canCommunicate($user, $partner);
             })
             ->map(function ($msgs, $partnerId) use ($userId) {
                 $latest = $msgs->first();
@@ -112,7 +123,9 @@ class MessageController extends Controller
     }
 
     /**
-     * Get thread (messages) with a specific authorized user, paginated.
+     * Get thread (messages) with a specific authorized user.
+     * Ordered newest first in pagination so page 1 contains the most recent messages,
+     * then reversed for natural reading display.
      */
     public function thread(Request $request, $partnerId)
     {
@@ -126,7 +139,7 @@ class MessageController extends Controller
 
         $perPage = min(100, max(10, (int) $request->input('per_page', 50)));
 
-        $messages = Message::with('sender:id,name', 'receiver:id,name')
+        $paginator = Message::with('sender:id,name', 'receiver:id,name')
             ->where(function ($q) use ($user, $partnerId) {
                 $q->where(function ($i) use ($user, $partnerId) {
                     $i->where('sender_id', $user->id)->where('receiver_id', $partnerId);
@@ -134,16 +147,23 @@ class MessageController extends Controller
                     $i->where('sender_id', $partnerId)->where('receiver_id', $user->id);
                 });
             })
-            ->orderBy('created_at', 'asc')
+            ->orderBy('created_at', 'desc')
             ->paginate($perPage);
 
-        // Mark received unread messages as read
-        Message::where('sender_id', $partnerId)
+        // Mark only the retrieved unread messages as read (not future un-paged messages)
+        $retrievedMessageIds = $paginator->getCollection()
             ->where('receiver_id', $user->id)
             ->whereNull('read_at')
-            ->update(['read_at' => now()]);
+            ->pluck('id');
 
-        return response()->json($messages);
+        if ($retrievedMessageIds->isNotEmpty()) {
+            Message::whereIn('id', $retrievedMessageIds)->update(['read_at' => now()]);
+        }
+
+        // Reverse the items so the returned collection is chronological for chat display
+        $paginator->setCollection($paginator->getCollection()->reverse()->values());
+
+        return response()->json($paginator);
     }
 
     /**

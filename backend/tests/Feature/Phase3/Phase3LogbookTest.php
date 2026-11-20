@@ -214,5 +214,92 @@ class Phase3LogbookTest extends TestCase
         $res->assertStatus(200);
         $entry->refresh();
         $this->assertEquals('approved', $entry->status);
+        $this->assertEquals($alan->id, $entry->reviewed_by);
+        $this->assertNotNull($entry->reviewed_at);
+    }
+
+    /**
+     * Test 9: Reviewing a draft or an already approved entry is rejected.
+     */
+    public function test_reviewing_invalid_entry_states_is_rejected(): void
+    {
+        $alan = User::where('email', 'supervisor@uonbi.ac.ke')->first();
+        $placement = Placement::whereHas('student.user', fn($q) => $q->where('email', 'john.doe@student.uonbi.ac.ke'))->first();
+
+        // 1. Cannot review draft entry
+        $draftEntry = LogbookEntry::create([
+            'placement_id' => $placement->id,
+            'entry_date'   => now()->toDateString(),
+            'week_number'  => 22,
+            'activities'   => 'Draft activities',
+            'status'       => 'draft',
+        ]);
+
+        Sanctum::actingAs($alan);
+        $resDraft = $this->postJson("/api/logbooks/{$draftEntry->id}/review", [
+            'action' => 'approved',
+        ]);
+        $resDraft->assertStatus(422);
+
+        // 2. Cannot alter already approved entry
+        $approvedEntry = LogbookEntry::create([
+            'placement_id' => $placement->id,
+            'entry_date'   => now()->toDateString(),
+            'week_number'  => 23,
+            'activities'   => 'Approved activities',
+            'status'       => 'approved',
+        ]);
+
+        $resApproved = $this->postJson("/api/logbooks/{$approvedEntry->id}/review", [
+            'action' => 'rejected',
+        ]);
+        $resApproved->assertStatus(422);
+    }
+
+    /**
+     * Test 10: Student can formally submit a draft entry.
+     */
+    public function test_student_can_formally_submit_draft_entry(): void
+    {
+        $john = User::where('email', 'john.doe@student.uonbi.ac.ke')->first();
+        $placement = Placement::whereHas('student.user', fn($q) => $q->where('email', 'john.doe@student.uonbi.ac.ke'))->first();
+
+        $entry = LogbookEntry::create([
+            'placement_id' => $placement->id,
+            'entry_date'   => now()->toDateString(),
+            'week_number'  => 24,
+            'activities'   => 'Ready for review',
+            'status'       => 'draft',
+        ]);
+
+        Sanctum::actingAs($john);
+        $res = $this->postJson("/api/logbooks/{$entry->id}/submit");
+        $res->assertStatus(200);
+
+        $entry->refresh();
+        $this->assertEquals('submitted', $entry->status);
+    }
+
+    /**
+     * Test 11: logbooks:lock command locks entries older than 72 hours.
+     */
+    public function test_logbooks_lock_artisan_command_locks_expired_entries(): void
+    {
+        $placement = Placement::whereHas('student.user', fn($q) => $q->where('email', 'john.doe@student.uonbi.ac.ke'))->first();
+
+        $expiredEntry = LogbookEntry::create([
+            'placement_id' => $placement->id,
+            'entry_date'   => now()->subDays(5)->toDateString(),
+            'week_number'  => 25,
+            'activities'   => 'Old entry',
+            'status'       => 'draft',
+            'created_at'   => now()->subHours(80),
+        ]);
+
+        $this->artisan('logbooks:lock')->assertSuccessful();
+
+        $expiredEntry->refresh();
+        $this->assertNotNull($expiredEntry->locked_at);
+        $this->assertEquals('Automatically locked after 72 hours', $expiredEntry->lock_reason);
     }
 }

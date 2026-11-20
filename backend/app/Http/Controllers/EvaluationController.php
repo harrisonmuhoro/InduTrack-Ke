@@ -48,6 +48,8 @@ class EvaluationController extends Controller
             return response()->json(['message' => 'Forbidden. You are not assigned as an evaluator for this placement.'], 403);
         }
 
+        $this->authorize('create', [Evaluation::class, $placement, $evaluatorType]);
+
         if (!in_array($placement->status, ['active', 'completed'])) {
             return response()->json(['message' => 'Cannot evaluate a placement that is not active or completed.'], 422);
         }
@@ -139,16 +141,9 @@ class EvaluationController extends Controller
     public function forPlacement(Request $request, $placementId)
     {
         $placement = Placement::with('student')->findOrFail($placementId);
-        $user = $request->user();
-
-        $isStudent = ($placement->student?->user_id === $user->id);
-        $isAcademic = ($placement->academic_supervisor_id === $user->id);
-        $isCompany = ($user->companySupervisor && $placement->company_supervisor_id === $user->companySupervisor->id);
-        $isInstAdmin = ($user->isInstitutionAdmin() && $placement->student?->institution_id === $user->institution_id);
-
-        if (!$user->isSuperAdmin() && !$isStudent && !$isAcademic && !$isCompany && !$isInstAdmin) {
-            return response()->json(['message' => 'Forbidden. Cannot view evaluations for this placement.'], 403);
-        }
+        
+        // Enforce policy authorization (PlacementPolicy::view)
+        $this->authorize('view', $placement);
 
         $evaluations = Evaluation::with('evaluator')
             ->where('placement_id', $placementId)

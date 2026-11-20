@@ -153,4 +153,27 @@ class Phase3MessagingTest extends TestCase
         $afterRes = $this->getJson('/api/messages/unread');
         $this->assertEquals(0, $afterRes->json('unread'));
     }
+
+    /**
+     * Test 7: Users cannot message themselves, even if superadmin.
+     */
+    public function test_self_messaging_is_forbidden_for_all_users_including_superadmin(): void
+    {
+        $superadmin = User::where('email', 'superadmin@indutrack.ke')->first();
+        Sanctum::actingAs($superadmin);
+
+        $response = $this->postJson('/api/messages', [
+            'receiver_id' => $superadmin->id,
+            'body'        => 'Self message attempt from superadmin',
+        ]);
+        $response->assertStatus(403);
+
+        $john = User::where('email', 'john.doe@student.uonbi.ac.ke')->first();
+        Sanctum::actingAs($john);
+        $res2 = $this->postJson('/api/messages', [
+            'receiver_id' => $john->id,
+            'body'        => 'Self message attempt from student',
+        ]);
+        $res2->assertStatus(403);
+    }
 }

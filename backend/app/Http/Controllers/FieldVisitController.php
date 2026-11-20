@@ -38,9 +38,7 @@ class FieldVisitController extends Controller
         $placement = Placement::findOrFail($request->placement_id);
 
         // Enforce policy authorization (only assigned academic supervisor or superadmin)
-        if (Gate::denies('create', [FieldVisit::class, $placement])) {
-            return response()->json(['message' => 'Forbidden. Only the assigned academic supervisor can schedule field visits for this placement.'], 403);
-        }
+        $this->authorize('create', [FieldVisit::class, $placement]);
 
         $visit = FieldVisit::create([
             'academic_supervisor_id' => $user->id,
@@ -57,25 +55,29 @@ class FieldVisitController extends Controller
     {
         $request->validate([
             'status'                      => 'nullable|in:scheduled,completed,cancelled',
-            'company_environment_notes'   => 'nullable|string',
-            'student_performance_notes'   => 'nullable|string',
-            'recommendations'             => 'nullable|string',
-            'gps_latitude'                => 'nullable|string',
-            'gps_longitude'               => 'nullable|string',
+            'company_environment_notes'   => 'nullable|string|max:3000',
+            'student_performance_notes'   => 'nullable|string|max:3000',
+            'recommendations'             => 'nullable|string|max:3000',
+            'gps_latitude'                => 'nullable|numeric|between:-90,90',
+            'gps_longitude'               => 'nullable|numeric|between:-180,180',
         ]);
 
         $user = $request->user();
         $visit = FieldVisit::findOrFail($id);
 
         // Enforce policy authorization
-        if (Gate::denies('update', $visit)) {
-            return response()->json(['message' => 'Forbidden. Only the conducting academic supervisor can update this visit report.'], 403);
-        }
+        $this->authorize('update', $visit);
 
-        // Validate state transitions
-        if ($request->has('status')) {
-            if ($visit->status === 'completed' && $request->status !== 'completed') {
+        // Strict state machine validation:
+        // scheduled -> completed, scheduled -> cancelled
+        // completed is terminal (cannot change to scheduled or cancelled)
+        // cancelled is terminal (cannot change to completed or scheduled)
+        if ($request->has('status') && $request->status !== $visit->status) {
+            if ($visit->status === 'completed') {
                 return response()->json(['message' => 'Cannot alter status of an already completed field visit.'], 422);
+            }
+            if ($visit->status === 'cancelled') {
+                return response()->json(['message' => 'Cannot alter status of a cancelled field visit.'], 422);
             }
         }
 
@@ -93,9 +95,7 @@ class FieldVisitController extends Controller
         $visit = FieldVisit::with('placement.student.user', 'placement.company')->findOrFail($id);
 
         // Enforce policy authorization
-        if (Gate::denies('view', $visit)) {
-            return response()->json(['message' => 'Forbidden. You do not have permission to view this field visit.'], 403);
-        }
+        $this->authorize('view', $visit);
 
         return response()->json($visit);
     }

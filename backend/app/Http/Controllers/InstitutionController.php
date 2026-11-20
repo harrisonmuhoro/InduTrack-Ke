@@ -162,13 +162,8 @@ class InstitutionController extends Controller
             'documents',
         ])->findOrFail($id);
 
-        $user   = $request->user();
-        $instId = $this->resolveInstitutionId($request);
-
-        // Enforce institutional boundary (superadmin passes through)
-        if (!$user->isSuperAdmin() && $student->institution_id !== $instId) {
-            return response()->json(['message' => 'Forbidden. Cannot access another institution\'s student records.'], 403);
-        }
+        // Enforce policy authorization (StudentPolicy::view)
+        $this->authorize('view', $student);
 
         return response()->json($student);
     }
@@ -252,13 +247,9 @@ class InstitutionController extends Controller
     public function approvePlacement(Request $request, $id)
     {
         $placement = Placement::with('student')->findOrFail($id);
-        $user      = $request->user();
-        $instId    = $this->resolveInstitutionId($request);
 
-        // Enforce institutional boundary
-        if (!$user->isSuperAdmin() && $placement->student?->institution_id !== $instId) {
-            return response()->json(['message' => 'Forbidden. Cannot approve placements for another institution.'], 403);
-        }
+        // Enforce policy authorization (PlacementPolicy::approve)
+        $this->authorize('approve', $placement);
 
         $placement->update(['status' => 'active']);
         Cache::flush();
@@ -269,13 +260,9 @@ class InstitutionController extends Controller
     {
         $request->validate(['reason' => 'nullable|string']);
         $placement = Placement::with('student')->findOrFail($id);
-        $user      = $request->user();
-        $instId    = $this->resolveInstitutionId($request);
 
-        // Enforce institutional boundary
-        if (!$user->isSuperAdmin() && $placement->student?->institution_id !== $instId) {
-            return response()->json(['message' => 'Forbidden. Cannot reject placements for another institution.'], 403);
-        }
+        // Enforce policy authorization (PlacementPolicy::approve)
+        $this->authorize('approve', $placement);
 
         $placement->update(['status' => 'rejected']);
         Cache::flush();

@@ -144,6 +144,7 @@ Route::middleware(['auth:sanctum', 'throttle:60,1'])->group(function () {
         Route::put('/companies/{id}/verify',       [InstitutionController::class, 'verifyCompany']);
         Route::put('/companies/{id}/blacklist',    [InstitutionController::class, 'blacklistCompany']);
         Route::get('/placements',                  [InstitutionController::class, 'placements']);
+        Route::get('/placements/{placementId}/logbook', [SupervisorController::class, 'viewLogbook']);
         Route::put('/placements/{id}/approve',     [InstitutionController::class, 'approvePlacement']);
         Route::put('/placements/{id}/reject',      [InstitutionController::class, 'rejectPlacement']);
         Route::get('/compliance',                  [InstitutionController::class, 'compliance']);

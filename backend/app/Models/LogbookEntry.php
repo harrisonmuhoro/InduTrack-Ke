@@ -13,8 +13,9 @@ class LogbookEntry extends Model
     protected $guarded = [];
 
     protected $casts = [
-        'locked_at' => 'datetime',
+        'locked_at'    => 'datetime',
         'submitted_at' => 'datetime',
+        'reviewed_at'  => 'datetime',
     ];
 
     public function placement()
@@ -27,11 +28,16 @@ class LogbookEntry extends Model
         return $this->hasMany(LogbookComment::class);
     }
 
+    public function reviewer()
+    {
+        return $this->belongsTo(User::class, 'reviewed_by');
+    }
+
     /**
      * An entry is editable if:
      * 1. locked_at is null.
-     * 2. Status is not 'approved'.
-     * 3. Created / submitted within 72 hours.
+     * 2. Status is not 'approved' or 'rejected'.
+     * 3. Created within 72 hours.
      */
     public function isEditable(): bool
     {
@@ -53,10 +59,10 @@ class LogbookEntry extends Model
     public function lock(string $reason = 'Window expired (72h limit)'): void
     {
         $this->update([
-            'locked_at' => now(),
+            'locked_at'   => now(),
             'lock_reason' => $reason,
             // If still in draft, auto-transition to submitted upon lock
-            'status' => $this->status === 'draft' ? 'submitted' : $this->status,
+            'status'      => $this->status === 'draft' ? 'submitted' : $this->status,
         ]);
     }
 }
