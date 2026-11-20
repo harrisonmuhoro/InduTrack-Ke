@@ -12,6 +12,8 @@ use App\Models\Evaluation;
 use App\Models\FieldVisit;
 use App\Models\Institution;
 use App\Models\Document;
+use App\Models\Student;
+use App\Models\Company;
 use App\Policies\ApplicationPolicy;
 use App\Policies\PlacementPolicy;
 use App\Policies\LogbookEntryPolicy;
@@ -19,6 +21,8 @@ use App\Policies\EvaluationPolicy;
 use App\Policies\FieldVisitPolicy;
 use App\Policies\InstitutionPolicy;
 use App\Policies\DocumentPolicy;
+use App\Policies\StudentPolicy;
+use App\Policies\CompanyPolicy;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -44,6 +48,8 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(FieldVisit::class, FieldVisitPolicy::class);
         Gate::policy(Institution::class, InstitutionPolicy::class);
         Gate::policy(Document::class, DocumentPolicy::class);
+        Gate::policy(Student::class, StudentPolicy::class);
+        Gate::policy(Company::class, CompanyPolicy::class);
 
         // Superadmin bypass for general Gates
         Gate::before(function ($user, $ability) {

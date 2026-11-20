@@ -10,23 +10,27 @@ use Illuminate\Http\Request;
 
 class CompanyController extends Controller
 {
+    /**
+     * Resolve the company for the authenticated user.
+     * Uses ONLY persisted database relationships — no email matching, no fallbacks.
+     *
+     * - company manager: users.company_id
+     * - company supervisor: via company_supervisors table
+     * - super_admin: cannot implicitly resolve a single company (must be context-specific)
+     */
     private function getCompany(Request $request): ?Company
     {
-        // 1. Try to get company via the CompanySupervisor relationship
-        $supervisor = CompanySupervisor::where('user_id', $request->user()->id)->first();
-        if ($supervisor && $supervisor->company) {
+        $user = $request->user();
+
+        // Company manager: direct company_id on users table
+        if ($user->company_id) {
+            return Company::find($user->company_id);
+        }
+
+        // Company supervisor: via CompanySupervisor relationship
+        $supervisor = CompanySupervisor::where('user_id', $user->id)->first();
+        if ($supervisor?->company) {
             return $supervisor->company;
-        }
-
-        // 2. Match by email (company account)
-        $company = Company::where('email', $request->user()->email)->first();
-        if ($company) {
-            return $company;
-        }
-
-        // 3. Fallback for super admin testing
-        if ($request->user()->isSuperAdmin()) {
-            return Company::first();
         }
 
         return null;
@@ -46,7 +50,7 @@ class CompanyController extends Controller
 
     public function createSlot(Request $request)
     {
-        $request->validate([
+        $validated = $request->validate([
             'department'      => 'required|string',
             'capacity'        => 'required|integer|min:1',
             'required_skills' => 'nullable|string',
@@ -61,7 +65,11 @@ class CompanyController extends Controller
             return response()->json(['message' => 'No company profile found for this user.'], 404);
         }
 
-        $slot = $company->attachmentSlots()->create($request->all());
+        // Authorization: only company manager (not supervisor) may create slots
+        $this->authorize('createSlot', $company);
+
+        // Persist ONLY validated fields — not $request->all()
+        $slot = $company->attachmentSlots()->create($validated);
 
         return response()->json($slot, 201);
     }

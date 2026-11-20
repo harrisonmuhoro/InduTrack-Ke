@@ -16,25 +16,46 @@ use Barryvdh\DomPDF\Facade\Pdf;
 
 class InstitutionController extends Controller
 {
+    /**
+     * Resolve and validate the institution ID for the authenticated user.
+     * - super_admin: returns null (unrestricted access)
+     * - institution_admin with valid institution_id: returns that ID
+     * - institution_admin with NULL institution_id: aborts with 403
+     */
+    private function resolveInstitutionId(Request $request): ?int
+    {
+        $user = $request->user();
+
+        if ($user->isSuperAdmin()) {
+            return null; // null = no institution filter = superadmin sees all
+        }
+
+        if (!$user->institution_id) {
+            abort(403, 'Forbidden. Institution administrator has no assigned institution.');
+        }
+
+        return (int) $user->institution_id;
+    }
+
     // ─── Analytics Dashboard ────────────────────────────────────────────────────
 
     public function analytics(Request $request)
     {
-        $user = $request->user();
-        $instId = $user->institution_id;
+        $user    = $request->user();
+        $instId  = $this->resolveInstitutionId($request); // throws 403 on null non-super
         $isSuper = $user->isSuperAdmin();
 
         $cacheKey = $isSuper ? 'analytics_superadmin' : "analytics_inst_{$instId}";
 
         $data = Cache::remember($cacheKey, 300, function () use ($instId, $isSuper) {
             $studentQuery = Student::query();
-            if (!$isSuper && $instId) {
+            if (!$isSuper) {
                 $studentQuery->where('institution_id', $instId);
             }
             $totalStudents = $studentQuery->count();
 
             $placementQuery = Placement::query();
-            if (!$isSuper && $instId) {
+            if (!$isSuper) {
                 $placementQuery->whereHas('student', fn($q) => $q->where('institution_id', $instId));
             }
             $activePlacements    = (clone $placementQuery)->where('status', 'active')->count();
@@ -43,13 +64,13 @@ class InstitutionController extends Controller
             $openSlots = AttachmentSlot::where('status', 'open')->count();
 
             $docQuery = Document::where('status', 'pending');
-            if (!$isSuper && $instId) {
+            if (!$isSuper) {
                 $docQuery->whereHas('student', fn($q) => $q->where('institution_id', $instId));
             }
             $pendingDocuments = $docQuery->count();
 
             $flagQuery = StudentFlag::where('resolved', false);
-            if (!$isSuper && $instId) {
+            if (!$isSuper) {
                 $flagQuery->whereHas('placement.student', fn($q) => $q->where('institution_id', $instId));
             }
             $flaggedStudents = $flagQuery->count();
@@ -62,7 +83,7 @@ class InstitutionController extends Controller
             // This week logbook submissions
             $weekStart = now()->startOfWeek();
             $logbookQuery = LogbookEntry::where('created_at', '>=', $weekStart);
-            if (!$isSuper && $instId) {
+            if (!$isSuper) {
                 $logbookQuery->whereHas('placement.student', fn($q) => $q->where('institution_id', $instId));
             }
             $logbooksThisWeek = $logbookQuery->count();
@@ -71,7 +92,7 @@ class InstitutionController extends Controller
             $cutoff = now()->subWeeks(2);
             $inactiveQuery = Student::whereHas('placements', fn($q) => $q->where('status', 'active'))
                 ->whereDoesntHave('placements.logbookEntries', fn($q) => $q->where('created_at', '>=', $cutoff));
-            if (!$isSuper && $instId) {
+            if (!$isSuper) {
                 $inactiveQuery->where('institution_id', $instId);
             }
             $inactiveStudents = $inactiveQuery->count();
@@ -103,12 +124,13 @@ class InstitutionController extends Controller
 
     public function students(Request $request)
     {
-        $user = $request->user();
-        $query = Student::with('user', 'placements.company');
+        $user   = $request->user();
+        $instId = $this->resolveInstitutionId($request);
+        $query  = Student::with('user', 'placements.company');
 
-        // Institutional boundary isolation
-        if (!$user->isSuperAdmin() && $user->institution_id) {
-            $query->where('institution_id', $user->institution_id);
+        // Institutional boundary — always applied for non-superadmin
+        if (!$user->isSuperAdmin()) {
+            $query->where('institution_id', $instId);
         }
 
         if ($request->search) {
@@ -140,9 +162,11 @@ class InstitutionController extends Controller
             'documents',
         ])->findOrFail($id);
 
-        // Enforce institutional boundary
-        $user = $request->user();
-        if (!$user->isSuperAdmin() && $student->institution_id !== $user->institution_id) {
+        $user   = $request->user();
+        $instId = $this->resolveInstitutionId($request);
+
+        // Enforce institutional boundary (superadmin passes through)
+        if (!$user->isSuperAdmin() && $student->institution_id !== $instId) {
             return response()->json(['message' => 'Forbidden. Cannot access another institution\'s student records.'], 403);
         }
 
@@ -153,6 +177,7 @@ class InstitutionController extends Controller
 
     public function companies(Request $request)
     {
+        // Company listing is global (all verified companies available to any admin)
         $query = Company::withCount(['attachmentSlots', 'ratings']);
 
         if ($request->search) {
@@ -168,6 +193,11 @@ class InstitutionController extends Controller
 
     public function verifyCompany(Request $request, $id)
     {
+        // Super admin only — institution admins cannot globally verify companies
+        if (!$request->user()->isSuperAdmin()) {
+            return response()->json(['message' => 'Forbidden. Only super administrators can verify companies.'], 403);
+        }
+
         $company = Company::findOrFail($id);
         $company->update(['is_verified' => true]);
         Cache::flush();
@@ -176,6 +206,11 @@ class InstitutionController extends Controller
 
     public function blacklistCompany(Request $request, $id)
     {
+        // Super admin only
+        if (!$request->user()->isSuperAdmin()) {
+            return response()->json(['message' => 'Forbidden. Only super administrators can blacklist companies.'], 403);
+        }
+
         $request->validate(['reason' => 'required|string']);
         $company = Company::findOrFail($id);
         $company->update(['is_verified' => false, 'blacklist_reason' => $request->reason]);
@@ -187,12 +222,13 @@ class InstitutionController extends Controller
 
     public function placements(Request $request)
     {
-        $user = $request->user();
-        $query = Placement::with('student.user', 'company', 'period');
+        $user   = $request->user();
+        $instId = $this->resolveInstitutionId($request);
+        $query  = Placement::with('student.user', 'company', 'period');
 
-        // Scoped to institution
-        if (!$user->isSuperAdmin() && $user->institution_id) {
-            $query->whereHas('student', fn($q) => $q->where('institution_id', $user->institution_id));
+        // Scoped to institution — always enforced for non-superadmin
+        if (!$user->isSuperAdmin()) {
+            $query->whereHas('student', fn($q) => $q->where('institution_id', $instId));
         }
 
         if ($request->status) {
@@ -205,10 +241,11 @@ class InstitutionController extends Controller
     public function approvePlacement(Request $request, $id)
     {
         $placement = Placement::with('student')->findOrFail($id);
-        $user = $request->user();
+        $user      = $request->user();
+        $instId    = $this->resolveInstitutionId($request);
 
         // Enforce institutional boundary
-        if (!$user->isSuperAdmin() && $placement->student?->institution_id !== $user->institution_id) {
+        if (!$user->isSuperAdmin() && $placement->student?->institution_id !== $instId) {
             return response()->json(['message' => 'Forbidden. Cannot approve placements for another institution.'], 403);
         }
 
@@ -221,10 +258,11 @@ class InstitutionController extends Controller
     {
         $request->validate(['reason' => 'nullable|string']);
         $placement = Placement::with('student')->findOrFail($id);
-        $user = $request->user();
+        $user      = $request->user();
+        $instId    = $this->resolveInstitutionId($request);
 
         // Enforce institutional boundary
-        if (!$user->isSuperAdmin() && $placement->student?->institution_id !== $user->institution_id) {
+        if (!$user->isSuperAdmin() && $placement->student?->institution_id !== $instId) {
             return response()->json(['message' => 'Forbidden. Cannot reject placements for another institution.'], 403);
         }
 
@@ -237,29 +275,29 @@ class InstitutionController extends Controller
 
     public function compliance(Request $request)
     {
-        $user = $request->user();
-        $instId = $user->institution_id;
-        $isSuper = $user->isSuperAdmin();
+        $user     = $request->user();
+        $instId   = $this->resolveInstitutionId($request);
+        $isSuper  = $user->isSuperAdmin();
         $cutoff2w = now()->subWeeks(2);
 
         // Students with active placement but no logbook in 2 weeks
         $inactive = Placement::with('student.user', 'company')
             ->where('status', 'active')
-            ->when(!$isSuper && $instId, fn($q) => $q->whereHas('student', fn($s) => $s->where('institution_id', $instId)))
+            ->when(!$isSuper, fn($q) => $q->whereHas('student', fn($s) => $s->where('institution_id', $instId)))
             ->whereDoesntHave('logbookEntries', fn($q) => $q->where('created_at', '>=', $cutoff2w))
             ->get();
 
         // Flagged students
         $flagged = StudentFlag::with('placement.student.user', 'placement.company', 'flagger')
             ->where('resolved', false)
-            ->when(!$isSuper && $instId, fn($q) => $q->whereHas('placement.student', fn($s) => $s->where('institution_id', $instId)))
+            ->when(!$isSuper, fn($q) => $q->whereHas('placement.student', fn($s) => $s->where('institution_id', $instId)))
             ->latest()
             ->get();
 
         // Pending document reviews
         $pendingDocs = Document::with('student.user')
             ->where('status', 'pending')
-            ->when(!$isSuper && $instId, fn($q) => $q->whereHas('student', fn($s) => $s->where('institution_id', $instId)))
+            ->when(!$isSuper, fn($q) => $q->whereHas('student', fn($s) => $s->where('institution_id', $instId)))
             ->latest()
             ->get();
 
@@ -272,11 +310,12 @@ class InstitutionController extends Controller
 
     public function resolveFlag(Request $request, $flagId)
     {
-        $flag = StudentFlag::with('placement.student')->findOrFail($flagId);
-        $user = $request->user();
+        $flag   = StudentFlag::with('placement.student')->findOrFail($flagId);
+        $user   = $request->user();
+        $instId = $this->resolveInstitutionId($request);
 
         // Institutional check
-        if (!$user->isSuperAdmin() && $flag->placement?->student?->institution_id !== $user->institution_id) {
+        if (!$user->isSuperAdmin() && $flag->placement?->student?->institution_id !== $instId) {
             return response()->json(['message' => 'Forbidden. Cannot resolve flag for another institution.'], 403);
         }
 
@@ -288,11 +327,12 @@ class InstitutionController extends Controller
 
     public function reportPlacements(Request $request)
     {
-        $user = $request->user();
-        $query = Placement::with('student.user', 'company', 'period');
+        $user   = $request->user();
+        $instId = $this->resolveInstitutionId($request);
+        $query  = Placement::with('student.user', 'company', 'period');
 
-        if (!$user->isSuperAdmin() && $user->institution_id) {
-            $query->whereHas('student', fn($q) => $q->where('institution_id', $user->institution_id));
+        if (!$user->isSuperAdmin()) {
+            $query->whereHas('student', fn($q) => $q->where('institution_id', $instId));
         }
 
         $placements = $query->get();
@@ -319,41 +359,41 @@ class InstitutionController extends Controller
 
     public function reportCompliance(Request $request)
     {
-        $user = $request->user();
-        $instId = $user->institution_id;
-        $isSuper = $user->isSuperAdmin();
+        $user     = $request->user();
+        $instId   = $this->resolveInstitutionId($request);
+        $isSuper  = $user->isSuperAdmin();
         $cutoff2w = now()->subWeeks(2);
 
         $placementQuery = Placement::where('status', 'active');
-        if (!$isSuper && $instId) {
+        if (!$isSuper) {
             $placementQuery->whereHas('student', fn($q) => $q->where('institution_id', $instId));
         }
         $totalActive = $placementQuery->count();
 
         $logbookQuery = LogbookEntry::where('created_at', '>=', now()->startOfWeek());
-        if (!$isSuper && $instId) {
+        if (!$isSuper) {
             $logbookQuery->whereHas('placement.student', fn($q) => $q->where('institution_id', $instId));
         }
         $logbooksThisWeek = $logbookQuery->count();
 
         $inactiveQuery = Placement::where('status', 'active')
             ->whereDoesntHave('logbookEntries', fn($q) => $q->where('created_at', '>=', $cutoff2w));
-        if (!$isSuper && $instId) {
+        if (!$isSuper) {
             $inactiveQuery->whereHas('student', fn($q) => $q->where('institution_id', $instId));
         }
         $inactiveCount = $inactiveQuery->count();
 
         $flagQuery = StudentFlag::where('resolved', false);
-        if (!$isSuper && $instId) {
+        if (!$isSuper) {
             $flagQuery->whereHas('placement.student', fn($q) => $q->where('institution_id', $instId));
         }
         $unresolvedFlags = $flagQuery->count();
 
         $data = [
-            'total_active_placements' => $totalActive,
+            'total_active_placements'      => $totalActive,
             'submitted_logbooks_this_week' => $logbooksThisWeek,
-            'inactive_students_count' => $inactiveCount,
-            'unresolved_flags' => $unresolvedFlags,
+            'inactive_students_count'      => $inactiveCount,
+            'unresolved_flags'             => $unresolvedFlags,
         ];
 
         if ($request->format === 'csv') {
@@ -379,11 +419,12 @@ class InstitutionController extends Controller
             'rejection_reason' => 'required_if:status,rejected|nullable|string',
         ]);
 
-        $doc = Document::with('student')->findOrFail($id);
-        $user = $request->user();
+        $doc    = Document::with('student')->findOrFail($id);
+        $user   = $request->user();
+        $instId = $this->resolveInstitutionId($request);
 
         // Enforce institutional boundary
-        if (!$user->isSuperAdmin() && $doc->student?->institution_id !== $user->institution_id) {
+        if (!$user->isSuperAdmin() && $doc->student?->institution_id !== $instId) {
             return response()->json(['message' => 'Forbidden. Cannot review documents for another institution.'], 403);
         }
 

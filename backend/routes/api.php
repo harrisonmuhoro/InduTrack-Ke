@@ -86,14 +86,21 @@ Route::middleware(['auth:sanctum', 'throttle:60,1'])->group(function () {
     });
 
     // ── Company Role Routes ───────────────────────────────────────────────────
+    // Slot creation is restricted to company managers and super_admin only.
+    // company_supervisors may view slots and applicants, but cannot create slots.
     Route::middleware('role:company,company_supervisor,super_admin')->group(function () {
         Route::get('/companies/slots',                     [CompanyController::class, 'slots']);
-        Route::post('/companies/slots',                    [CompanyController::class, 'createSlot']);
         Route::get('/companies/applicants',                [CompanyController::class, 'allApplicants']);
         Route::get('/companies/slots/{slotId}/applicants', [CompanyController::class, 'applicants']);
     });
 
+    // Slot creation: company manager and super_admin ONLY (not company_supervisor)
+    Route::middleware('role:company,super_admin')->group(function () {
+        Route::post('/companies/slots', [CompanyController::class, 'createSlot']);
+    });
+
     // ── Supervisor Routes (Academic & Company Supervisors) ─────────────────────
+    // Field visits are restricted to academic supervisors only (not company supervisors).
     Route::middleware('role:academic_supervisor,institution_supervisor,company_supervisor,super_admin')->group(function () {
         Route::get('/supervisors/students',                             [SupervisorController::class, 'assignedStudents']);
         Route::get('/supervisors/placements/{placementId}/logbook',     [SupervisorController::class, 'viewLogbook']);
@@ -109,8 +116,10 @@ Route::middleware(['auth:sanctum', 'throttle:60,1'])->group(function () {
         // Final Evaluations
         Route::post('/evaluations',                         [EvaluationController::class, 'store']);
         Route::get('/evaluations/placement/{placementId}',  [EvaluationController::class, 'forPlacement']);
+    });
 
-        // Field Visits (Academic Supervisors)
+    // Field Visits: academic supervisors only (and super_admin)
+    Route::middleware('role:academic_supervisor,institution_supervisor,super_admin')->group(function () {
         Route::get('/field-visits',         [FieldVisitController::class, 'index']);
         Route::post('/field-visits',        [FieldVisitController::class, 'store']);
         Route::put('/field-visits/{id}',    [FieldVisitController::class, 'update']);

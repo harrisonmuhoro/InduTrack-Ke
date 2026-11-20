@@ -11,7 +11,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
-#[Fillable(['name', 'email', 'password', 'profile_photo_path', 'institution_id'])]
+#[Fillable(['name', 'email', 'password', 'profile_photo_path', 'institution_id', 'company_id'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable implements MustVerifyEmail
 {
@@ -43,6 +43,11 @@ class User extends Authenticatable implements MustVerifyEmail
     public function institution()
     {
         return $this->belongsTo(Institution::class);
+    }
+
+    public function company()
+    {
+        return $this->belongsTo(Company::class);
     }
 
     public function student()
@@ -139,14 +144,20 @@ class User extends Authenticatable implements MustVerifyEmail
 
     /**
      * Resolve the company ID for company managers or company supervisors.
+     * Uses only persisted database relationships — never email matching.
      */
     public function getCompanyId(): ?int
     {
+        // Company manager: direct company_id on users table
+        if ($this->company_id) {
+            return $this->company_id;
+        }
+
+        // Company supervisor: via CompanySupervisor relationship
         if ($this->companySupervisor) {
             return $this->companySupervisor->company_id;
         }
 
-        $company = Company::where('email', $this->email)->first();
-        return $company?->id;
+        return null;
     }
 }

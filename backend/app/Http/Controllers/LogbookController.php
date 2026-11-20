@@ -7,6 +7,7 @@ use App\Models\Placement;
 use App\Models\Student;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Gate;
 
 class LogbookController extends Controller
 {
@@ -165,11 +166,9 @@ class LogbookController extends Controller
         $placement = Placement::with('student')->findOrFail($placementId);
         $user = $request->user();
 
-        $isAcademic = ($placement->academic_supervisor_id === $user->id);
-        $isInstAdmin = ($user->isInstitutionAdmin() && $placement->student?->institution_id === $user->institution_id);
-
-        if (!$user->isSuperAdmin() && !$isAcademic && !$isInstAdmin) {
-            return response()->json(['message' => 'Forbidden. Only the assigned academic supervisor or institution admin can submit grades.'], 403);
+        // Enforce policy: only assigned academic supervisor may grade
+        if (Gate::denies('grade', $placement)) {
+            return response()->json(['message' => 'Forbidden. Only the assigned academic supervisor can submit grades.'], 403);
         }
 
         $placement->update(['academic_grade' => $request->grade]);

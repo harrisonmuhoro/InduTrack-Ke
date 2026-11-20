@@ -267,10 +267,18 @@ class DatabaseSeeder extends Seeder
             ['user_id' => $users['sup_wanjiku']->id, 'institution_id' => $uonId, 'department' => 'Information Technology', 'created_at' => now(), 'updated_at' => now()],
         ]);
 
-        // Company Managers (Role: company)
+        // Company Managers (Role: company) — set company_id via direct relationship
         if (isset($roles['company'])) {
+            $sfcCompanyId   = DB::table('companies')->where('email', 'hr@safaricom.co.ke')->value('id');
+            $kcbCompanyId   = DB::table('companies')->where('email', 'careers@kcbgroup.com')->value('id');
+
             $users['safaricom_company'] = $this->createUser('Safaricom HR', 'hr@safaricom.co.ke', $roles['company']);
             $users['default_company']   = $this->createUser('Company Admin', 'company@example.com', $roles['company']);
+
+            // Assign company_id to company manager accounts
+            if ($sfcCompanyId) {
+                $users['safaricom_company']->update(['company_id' => $sfcCompanyId]);
+            }
         }
 
         // Company Supervisors

@@ -11,7 +11,9 @@ use App\Models\Company;
 use App\Models\Institution;
 use App\Models\Role;
 use App\Models\Permission;
+use App\Models\Evaluation;
 use Laravel\Sanctum\Sanctum;
+use Illuminate\Support\Facades\DB;
 
 class AuthorizationTest extends TestCase
 {
@@ -21,6 +23,7 @@ class AuthorizationTest extends TestCase
         $this->artisan('migrate');
         $this->seed(\Database\Seeders\DatabaseSeeder::class);
     }
+
     /**
      * Test 1: All six documented roles have clearly defined permissions.
      */
@@ -218,5 +221,195 @@ class AuthorizationTest extends TestCase
 
         $response->assertStatus(201);
         $this->assertEquals('company_supervisor', $response->json('evaluator_type'));
+    }
+
+    /**
+     * Test 8: Institution admin with NULL institution_id gets 403 on all scoped endpoints.
+     */
+    public function test_institution_admin_with_null_institution_id_gets_403(): void
+    {
+        // Create an institution admin with no institution assigned
+        $orphanAdmin = User::factory()->create([
+            'name'               => 'Orphan Admin',
+            'email'              => 'orphan.admin@test.ke',
+            'email_verified_at'  => now(),
+            'institution_id'     => null,
+        ]);
+        $adminRole = Role::where('name', 'institution_admin')->first();
+        DB::table('user_roles')->insert(['user_id' => $orphanAdmin->id, 'role_id' => $adminRole->id]);
+
+        Sanctum::actingAs($orphanAdmin);
+
+        // Student list should return 403
+        $this->getJson('/api/admin/students')->assertStatus(403);
+
+        // Analytics dashboard should return 403
+        $this->getJson('/api/admin/dashboard')->assertStatus(403);
+
+        // Placements list should return 403
+        $this->getJson('/api/admin/placements')->assertStatus(403);
+
+        // Compliance report should return 403
+        $this->getJson('/api/admin/compliance')->assertStatus(403);
+
+        // Placement reports should return 403
+        $this->getJson('/api/admin/reports/placements')->assertStatus(403);
+
+        // Compliance reports should return 403
+        $this->getJson('/api/admin/reports/compliance')->assertStatus(403);
+    }
+
+    /**
+     * Test 9: Company supervisor cannot create attachment slots (manager-only operation).
+     */
+    public function test_company_supervisor_cannot_create_slots(): void
+    {
+        $jane = User::where('email', 'jane.smith@safaricom.co.ke')->first();
+
+        Sanctum::actingAs($jane);
+        $response = $this->postJson('/api/companies/slots', [
+            'department' => 'Engineering',
+            'capacity'   => 2,
+        ]);
+
+        // Must be 403 — route is restricted to role:company,super_admin
+        $response->assertStatus(403);
+    }
+
+    /**
+     * Test 10: Company supervisor cannot access field visit endpoints.
+     */
+    public function test_company_supervisor_cannot_access_field_visits(): void
+    {
+        $jane = User::where('email', 'jane.smith@safaricom.co.ke')->first();
+
+        Sanctum::actingAs($jane);
+
+        $this->getJson('/api/field-visits')->assertStatus(403);
+        $this->postJson('/api/field-visits', [
+            'placement_id' => 1,
+            'visit_date'   => now()->toDateString(),
+        ])->assertStatus(403);
+    }
+
+    /**
+     * Test 11: Certificate generation fails for incomplete placement.
+     */
+    public function test_certificate_rejected_for_incomplete_placement(): void
+    {
+        $john = User::where('email', 'john.doe@student.uonbi.ac.ke')->first();
+        $johnPlacement = Placement::whereHas('student.user', fn($q) => $q->where('email', 'john.doe@student.uonbi.ac.ke'))->first();
+
+        // John's placement is 'active', not 'completed' — certificate must be rejected
+        $this->assertEquals('active', $johnPlacement->status);
+
+        Sanctum::actingAs($john);
+        $this->getJson("/api/students/placements/{$johnPlacement->id}/certificate")->assertStatus(403);
+    }
+
+    /**
+     * Test 12: Certificate generation fails for completed placement missing one evaluator type.
+     */
+    public function test_certificate_rejected_when_missing_one_evaluator_type(): void
+    {
+        // Brian's placement is 'completed' with both evaluations in seeder
+        $brian = User::where('email', 'brian.otieno@student.uonbi.ac.ke')->first();
+        $brianPlacement = Placement::whereHas('student.user', fn($q) => $q->where('email', 'brian.otieno@student.uonbi.ac.ke'))->first();
+        $this->assertEquals('completed', $brianPlacement->status);
+
+        // Remove academic evaluation to simulate missing evaluator
+        Evaluation::where('placement_id', $brianPlacement->id)
+            ->where('evaluator_type', 'academic_supervisor')
+            ->delete();
+
+        Sanctum::actingAs($brian);
+        $response = $this->getJson("/api/students/placements/{$brianPlacement->id}/certificate");
+        $response->assertStatus(403);
+        $this->assertStringContainsString('Academic supervisor evaluation is missing', $response->json('message'));
+    }
+
+    /**
+     * Test 13: Certificate generation succeeds for completed placement with both evaluations.
+     */
+    public function test_certificate_approved_for_completed_placement_with_all_evaluations(): void
+    {
+        $brian = User::where('email', 'brian.otieno@student.uonbi.ac.ke')->first();
+        $brianPlacement = Placement::whereHas('student.user', fn($q) => $q->where('email', 'brian.otieno@student.uonbi.ac.ke'))->first();
+
+        // Both evaluations seeded — should succeed (not 403)
+        $companyEval  = Evaluation::where('placement_id', $brianPlacement->id)->where('evaluator_type', 'company_supervisor')->exists();
+        $academicEval = Evaluation::where('placement_id', $brianPlacement->id)->where('evaluator_type', 'academic_supervisor')->exists();
+        $this->assertTrue($companyEval, 'Company evaluation must exist for Brian');
+        $this->assertTrue($academicEval, 'Academic evaluation must exist for Brian');
+
+        Sanctum::actingAs($brian);
+        $response = $this->getJson("/api/students/placements/{$brianPlacement->id}/certificate");
+        // Must not be 403 (authorization passed); 200 = PDF response or error from PDF lib in test env
+        $this->assertNotEquals(403, $response->status(), 'Certificate should not be forbidden when all conditions are met');
+    }
+
+    /**
+     * Test 14: Evaluation unique constraint prevents duplicate evaluator type per placement.
+     */
+    public function test_duplicate_evaluation_per_evaluator_type_is_rejected(): void
+    {
+        $jane = User::where('email', 'jane.smith@safaricom.co.ke')->first();
+        $johnPlacement = Placement::whereHas('student.user', fn($q) => $q->where('email', 'john.doe@student.uonbi.ac.ke'))->first();
+
+        $payload = [
+            'placement_id'        => $johnPlacement->id,
+            'score_punctuality'   => 4,
+            'score_attitude'      => 5,
+            'score_technical'     => 4,
+            'score_teamwork'      => 5,
+            'score_communication' => 4,
+            'would_accept_again'  => true,
+        ];
+
+        Sanctum::actingAs($jane);
+
+        // First submission should succeed
+        $this->postJson('/api/evaluations', $payload)->assertStatus(201);
+
+        // Second submission (same type for same placement) must be rejected
+        $this->postJson('/api/evaluations', $payload)->assertStatus(422);
+    }
+
+    /**
+     * Test 15: Company manager from Company A cannot access Company B applicants.
+     */
+    public function test_company_manager_cannot_access_another_companys_applicants(): void
+    {
+        // Safaricom company manager
+        $sfcManager = User::where('email', 'hr@safaricom.co.ke')->first();
+        $this->assertNotNull($sfcManager, 'Safaricom company manager must exist');
+
+        // Get a KCB slot to try to access
+        $kcbCompany = Company::where('email', 'careers@kcbgroup.com')->first();
+        $this->assertNotNull($kcbCompany, 'KCB company must exist');
+
+        $kcbSlot = $kcbCompany->attachmentSlots()->first();
+        $this->assertNotNull($kcbSlot, 'KCB must have attachment slots');
+
+        Sanctum::actingAs($sfcManager);
+
+        // Safaricom manager tries to access KCB's slot applicants -> 403 or 404
+        // (findOrFail on company->slots returns 404 when slot doesn't belong to that company)
+        $response = $this->getJson("/api/companies/slots/{$kcbSlot->id}/applicants");
+        $response->assertStatus(404);
+    }
+
+    /**
+     * Test 16: verifyCompany and blacklistCompany are super_admin only.
+     */
+    public function test_institution_admin_cannot_verify_or_blacklist_companies(): void
+    {
+        $admin   = User::where('email', 'admin@uonbi.ac.ke')->first();
+        $company = Company::first();
+
+        Sanctum::actingAs($admin);
+
+        $this->putJson("/api/admin/companies/{$company->id}/verify")->assertStatus(403);
+        $this->putJson("/api/admin/companies/{$company->id}/blacklist", ['reason' => 'test'])->assertStatus(403);
     }
 }

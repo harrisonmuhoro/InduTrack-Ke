@@ -61,13 +61,8 @@ class ApplicationController extends Controller
         $application = Application::with(['student.user', 'slot.company'])->findOrFail($id);
         $user = $request->user();
 
-        // Enforce authorization: Company owning slot, institution admin of student, or superadmin
-        $isCompany = ($application->slot && $application->slot->company_id === $user->getCompanyId());
-        $isInstAdmin = ($user->isInstitutionAdmin() && $application->student?->institution_id === $user->institution_id);
-
-        if (!$user->isSuperAdmin() && !$isCompany && !$isInstAdmin) {
-            return response()->json(['message' => 'Forbidden. You are not authorized to update this application.'], 403);
-        }
+        // Enforce policy — company owning slot may update; institution admin of student may update
+        $this->authorize('updateStatus', $application);
 
         $application->update(['status' => $request->status]);
 
@@ -84,13 +79,8 @@ class ApplicationController extends Controller
         $application = Application::with('student.user', 'slot.company')->findOrFail($id);
         $user = $request->user();
 
-        $isStudent = ($application->student?->user_id === $user->id);
-        $isCompany = ($application->slot && $application->slot->company_id === $user->getCompanyId());
-        $isInstAdmin = ($user->isInstitutionAdmin() && $application->student?->institution_id === $user->institution_id);
-
-        if (!$user->isSuperAdmin() && !$isStudent && !$isCompany && !$isInstAdmin) {
-            return response()->json(['message' => 'Forbidden. You cannot view this offer letter.'], 403);
-        }
+        // Enforce policy
+        $this->authorize('generateOffer', $application);
 
         $data = [
             'studentName' => $application->student->user->name ?? 'Student',

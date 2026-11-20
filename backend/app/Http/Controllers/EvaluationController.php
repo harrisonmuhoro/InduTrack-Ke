@@ -8,6 +8,8 @@ use App\Models\Student;
 use App\Models\CompanyRating;
 use App\Models\Company;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Database\UniqueConstraintViolationException;
 
 class EvaluationController extends Controller
 {
@@ -25,7 +27,7 @@ class EvaluationController extends Controller
             'score_communication' => 'required|integer|min:1|max:5',
             'remarks'             => 'nullable|string',
             'would_accept_again'  => 'required|boolean',
-            'evaluator_type'      => 'nullable|in:company_supervisor,academic_supervisor',
+            // evaluator_type is IGNORED from request; derived server-side
         ]);
 
         $user = $request->user();
@@ -37,23 +39,17 @@ class EvaluationController extends Controller
         } elseif ($user->isAcademicSupervisor() && $placement->academic_supervisor_id === $user->id) {
             $evaluatorType = 'academic_supervisor';
         } elseif ($user->isSuperAdmin()) {
-            $evaluatorType = $request->evaluator_type ?? 'academic_supervisor';
+            // Super admin: must be explicit about which evaluator type
+            if (!in_array($request->input('evaluator_type'), ['company_supervisor', 'academic_supervisor'])) {
+                return response()->json(['message' => 'Super admin must specify a valid evaluator_type.'], 422);
+            }
+            $evaluatorType = $request->input('evaluator_type');
         } else {
             return response()->json(['message' => 'Forbidden. You are not assigned as an evaluator for this placement.'], 403);
         }
 
         if (!in_array($placement->status, ['active', 'completed'])) {
             return response()->json(['message' => 'Cannot evaluate a placement that is not active or completed.'], 422);
-        }
-
-        // Prevent duplicate evaluations
-        $existing = Evaluation::where('placement_id', $request->placement_id)
-            ->where('evaluator_id', $user->id)
-            ->whereNotNull('submitted_at')
-            ->first();
-
-        if ($existing) {
-            return response()->json(['message' => 'You have already submitted an evaluation for this student.'], 422);
         }
 
         $scores = [
@@ -65,20 +61,32 @@ class EvaluationController extends Controller
         ];
         $total = round(array_sum($scores) / count($scores), 2);
 
-        $evaluation = Evaluation::create([
-            'placement_id'        => $request->placement_id,
-            'evaluator_id'        => $user->id,
-            'evaluator_type'      => $evaluatorType,
-            'score_punctuality'   => $request->score_punctuality,
-            'score_attitude'      => $request->score_attitude,
-            'score_technical'     => $request->score_technical,
-            'score_teamwork'      => $request->score_teamwork,
-            'score_communication' => $request->score_communication,
-            'total_score'         => $total,
-            'remarks'             => $request->remarks,
-            'would_accept_again'  => $request->would_accept_again,
-            'submitted_at'        => now(),
-        ]);
+        try {
+            $evaluation = DB::transaction(function () use ($request, $placement, $user, $evaluatorType, $total) {
+                return Evaluation::create([
+                    'placement_id'        => $request->placement_id,
+                    'evaluator_id'        => $user->id,
+                    'evaluator_type'      => $evaluatorType,
+                    'score_punctuality'   => $request->score_punctuality,
+                    'score_attitude'      => $request->score_attitude,
+                    'score_technical'     => $request->score_technical,
+                    'score_teamwork'      => $request->score_teamwork,
+                    'score_communication' => $request->score_communication,
+                    'total_score'         => $total,
+                    'remarks'             => $request->remarks,
+                    'would_accept_again'  => $request->would_accept_again,
+                    'submitted_at'        => now(),
+                ]);
+            });
+        } catch (UniqueConstraintViolationException $e) {
+            return response()->json(['message' => 'An evaluation for this evaluator type has already been submitted for this placement.'], 422);
+        } catch (\Illuminate\Database\QueryException $e) {
+            // Fallback for older Laravel versions / MySQL duplicate key error code 1062
+            if ($e->getCode() == 23000 || str_contains($e->getMessage(), 'Duplicate entry')) {
+                return response()->json(['message' => 'An evaluation for this evaluator type has already been submitted for this placement.'], 422);
+            }
+            throw $e;
+        }
 
         return response()->json($evaluation, 201);
     }
