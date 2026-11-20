@@ -162,14 +162,19 @@ export default function StudentLogbook() {
         setSaving(true);
         try {
             let entryId = currentEntry?.id;
+
             if (currentEntry) {
+                // Always update content fields first (draft save or pre-submit edit)
                 await api.put(`/logbooks/${currentEntry.id}`, {
                     activities: form.activities,
                     lessons_learned: form.lessons_learned || null,
                     challenges: form.challenges || null,
                     plan_next_week: form.plan_next_week || null,
                 });
+                entryId = currentEntry.id;
             } else {
+                // Create a new draft — never pass status:'submitted' on create;
+                // submission is a separate, explicit action via the /submit endpoint.
                 const res = await api.post('/logbooks', {
                     entry_date: new Date().toISOString().slice(0, 10),
                     week_number: currentWeek,
@@ -177,11 +182,15 @@ export default function StudentLogbook() {
                     lessons_learned: form.lessons_learned || null,
                     challenges: form.challenges || null,
                     plan_next_week: form.plan_next_week || null,
-                    status: submitting ? 'submitted' : 'draft',
+                    // Always create as draft — submission is an explicit student action
+                    status: 'draft',
                 });
                 entryId = res.data?.id;
             }
 
+            // Explicit submit step — always call the dedicated /submit endpoint.
+            // This ensures the backend /logbooks/{id}/submit endpoint is invoked,
+            // the status is properly transitioned, and the audit trail is correct.
             if (submitting && entryId && currentEntry?.status !== 'submitted') {
                 await api.post(`/logbooks/${entryId}/submit`);
             }

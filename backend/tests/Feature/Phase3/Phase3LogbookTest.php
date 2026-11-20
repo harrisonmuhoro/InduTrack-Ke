@@ -556,6 +556,31 @@ class Phase3LogbookTest extends TestCase
         ]);
     }
 
+    public function test_super_admin_review_race_records_super_admin_actor_role(): void
+    {
+        $admin = User::where('email', 'superadmin@indutrack.ke')->first();
+        $placement = Placement::whereHas('student.user', fn($q) => $q->where('email', 'john.doe@student.uonbi.ac.ke'))->first();
+        $entry = LogbookEntry::create([
+            'placement_id' => $placement->id,
+            'entry_date' => now()->toDateString(),
+            'week_number' => 34,
+            'activities' => 'Super-admin concurrency guard test',
+            'status' => 'submitted',
+        ]);
+
+        Sanctum::actingAs($admin);
+        $this->postJson("/api/logbooks/{$entry->id}/review", ['action' => 'approved'])->assertStatus(200);
+        $this->postJson("/api/logbooks/{$entry->id}/review", ['action' => 'rejected'])->assertStatus(422);
+
+        $this->assertDatabaseHas('logbook_review_histories', [
+            'logbook_entry_id' => $entry->id,
+            'actor_id' => $admin->id,
+            'actor_role' => 'super_admin',
+            'event_type' => 'review',
+        ]);
+        $this->assertDatabaseCount('logbook_review_histories', 1);
+    }
+
     /**
      * Finding 5 — resubmit action is recorded as actor_role=student, event_type=resubmit.
      * reviewer_id must be null for student resubmission.

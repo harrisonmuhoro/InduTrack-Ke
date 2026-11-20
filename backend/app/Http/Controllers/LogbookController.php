@@ -263,12 +263,15 @@ class LogbookController extends Controller
                 abort(422, "Cannot transition a {$entry->status} entry to {$request->action}.");
             }
             $reviewedAt = now();
+            $actorRole = $user->isSuperAdmin()
+                ? 'super_admin'
+                : ($user->isAcademicSupervisor() ? 'academic_supervisor' : 'unknown');
             LogbookReviewHistory::create([
                 'logbook_entry_id' => $entry->id,
                 // Both reviewer_id (legacy) and actor_* (generic) are populated for formal decisions.
                 'reviewer_id'      => $user->id,
                 'actor_id'         => $user->id,
-                'actor_role'       => 'academic_supervisor',
+                'actor_role'       => $actorRole,
                 'event_type'       => 'review',
                 'previous_status'  => $entry->status,
                 'new_status'       => $request->action,
