@@ -79,6 +79,8 @@ class LogbookEntryPolicy
     {
         return $entry->status === 'rejected'
             && $entry->locked_at === null
+            && $entry->correction_deadline !== null
+            && now()->lessThanOrEqualTo($entry->correction_deadline)
             && $entry->placement?->student?->user_id === $user->id;
     }
 

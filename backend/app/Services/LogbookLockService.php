@@ -21,10 +21,6 @@ class LogbookLockService
                     foreach ($entries as $entry) {
                         $entry->locked_at = $now;
                         $entry->lock_reason = 'Automatically locked after 72 hours';
-                        if ($entry->status === 'draft') {
-                            $entry->status = 'submitted';
-                            $entry->submitted_at = $entry->submitted_at ?: $now;
-                        }
                         $entry->save();
                         $count++;
                     }

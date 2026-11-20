@@ -105,8 +105,12 @@ reviewed, but this matrix does not claim exhaustive endpoint-level test coverage
   timestamp, and request metadata. The current entry fields are a convenient
   summary, not the audit trail.
 - `logbooks:lock` delegates to `LogbookLockService`; the scheduler invokes the
-  command hourly. Production must run Laravel's scheduler worker/cron for that
+  command hourly. Locking records the timestamp/reason but never changes a draft
+  into a submission. Production must run Laravel's scheduler worker/cron for that
   schedule to execute.
+- Rejected entries receive an explicit 72-hour `correction_deadline`. Reopening is
+  denied after that deadline, and the deadline is used as the editing window after
+  reopening rather than the original creation timestamp.
 
 Before deploying the review-history migration, take the normal database backup and
 confirm the migration ledger. The migration adds history only; it does not infer or

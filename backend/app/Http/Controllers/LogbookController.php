@@ -233,17 +233,16 @@ class LogbookController extends Controller
         // Enforce policy authorization (LogbookEntryPolicy::review)
         $this->authorize('review', $entry);
 
-        $allowedTransitions = [
-            'submitted' => ['approved', 'rejected', 'flagged'],
-            'flagged' => ['approved', 'rejected'],
-        ];
-        if (! in_array($request->action, $allowedTransitions[$entry->status] ?? [], true)) {
-            return response()->json([
-                'message' => "Cannot transition a {$entry->status} entry to {$request->action}.",
-            ], 422);
-        }
-
         DB::transaction(function () use ($entry, $user, $request) {
+            $entry = LogbookEntry::with('placement')->lockForUpdate()->findOrFail($entry->id);
+            $this->authorize('review', $entry);
+            $allowedTransitions = [
+                'submitted' => ['approved', 'rejected', 'flagged'],
+                'flagged' => ['approved', 'rejected'],
+            ];
+            if (! in_array($request->action, $allowedTransitions[$entry->status] ?? [], true)) {
+                abort(422, "Cannot transition a {$entry->status} entry to {$request->action}.");
+            }
             $reviewedAt = now();
             LogbookReviewHistory::create([
                 'logbook_entry_id' => $entry->id,
@@ -259,6 +258,7 @@ class LogbookController extends Controller
                 'status' => $request->action,
                 'reviewed_by' => $user->id,
                 'reviewed_at' => $reviewedAt,
+                'correction_deadline' => $request->action === 'rejected' ? $reviewedAt->copy()->addHours(72) : null,
             ]);
 
             if ($request->comment) {

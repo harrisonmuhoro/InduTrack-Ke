@@ -16,6 +16,7 @@ class LogbookEntry extends Model
         'locked_at'    => 'datetime',
         'submitted_at' => 'datetime',
         'reviewed_at'  => 'datetime',
+        'correction_deadline' => 'datetime',
     ];
 
     public function placement()
@@ -54,7 +55,11 @@ class LogbookEntry extends Model
             return false;
         }
 
-        // The 72-hour window begins at creation time
+        if ($this->correction_deadline) {
+            return now()->lessThanOrEqualTo($this->correction_deadline);
+        }
+
+        // The initial 72-hour window begins at creation time.
         return $this->created_at->diffInHours(now()) < 72;
     }
 

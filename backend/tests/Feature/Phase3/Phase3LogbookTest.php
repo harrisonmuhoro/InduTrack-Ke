@@ -301,6 +301,7 @@ class Phase3LogbookTest extends TestCase
         $expiredEntry->refresh();
         $this->assertNotNull($expiredEntry->locked_at);
         $this->assertEquals('Automatically locked after 72 hours', $expiredEntry->lock_reason);
+        $this->assertEquals('draft', $expiredEntry->status, 'Locking must not submit an unsubmitted draft.');
     }
 
     public function test_rejected_entry_can_be_reopened_and_each_decision_is_immutable(): void
@@ -319,6 +320,8 @@ class Phase3LogbookTest extends TestCase
         Sanctum::actingAs($alan);
         $this->postJson("/api/logbooks/{$entry->id}/review", ['action' => 'rejected', 'comment' => 'Please correct this.'])
             ->assertStatus(200);
+        $entry->refresh();
+        $this->assertNotNull($entry->correction_deadline);
 
         Sanctum::actingAs($john);
         $this->postJson("/api/logbooks/{$entry->id}/resubmit")->assertStatus(200);
@@ -331,6 +334,23 @@ class Phase3LogbookTest extends TestCase
         $this->assertDatabaseHas('logbook_review_histories', ['previous_status' => 'submitted', 'new_status' => 'rejected']);
         $this->assertDatabaseHas('logbook_review_histories', ['previous_status' => 'rejected', 'new_status' => 'draft']);
         $this->assertDatabaseHas('logbook_review_histories', ['previous_status' => 'submitted', 'new_status' => 'approved']);
+    }
+
+    public function test_expired_rejected_entry_cannot_be_reopened(): void
+    {
+        $john = User::where('email', 'john.doe@student.uonbi.ac.ke')->first();
+        $placement = Placement::whereHas('student.user', fn($q) => $q->where('email', $john->email))->first();
+        $entry = LogbookEntry::create([
+            'placement_id' => $placement->id,
+            'entry_date' => now()->toDateString(),
+            'week_number' => 28,
+            'activities' => 'Rejected old entry',
+            'status' => 'rejected',
+            'correction_deadline' => now()->subMinute(),
+        ]);
+
+        Sanctum::actingAs($john);
+        $this->postJson("/api/logbooks/{$entry->id}/resubmit")->assertStatus(403);
     }
 
     public function test_company_supervisor_cannot_make_formal_academic_decision(): void
