@@ -378,6 +378,8 @@ export default function StudentLogbook() {
 {feedbackEntries.map((entry, idx) => {
     const isOpen = openFeedback === idx;
     const comment = entry.comments[entry.comments.length - 1];
+    const correctionDeadline = entry.correction_deadline ? new Date(entry.correction_deadline) : null;
+    const correctionExpired = correctionDeadline ? correctionDeadline.getTime() <= Date.now() : false;
     return (
 <div className={isOpen ? 'p-4 bg-primary-subtle/30' : 'p-4 hover:bg-surface-container-low transition-colors cursor-pointer'} key={entry.id}>
 <button className={`w-full flex items-center justify-between text-left ${isOpen ? 'mb-3' : ''}`} onClick={() => setOpenFeedback(isOpen ? -1 : idx)} type="button">
@@ -396,11 +398,20 @@ export default function StudentLogbook() {
 <span className="px-2 py-0.5 bg-primary text-white text-[10px] font-bold rounded-full">{(entry.status || 'reviewed').toUpperCase()}</span>
 <span className="text-[10px] text-outline">Published {timeAgo(comment?.created_at)}</span>
 {entry.status === 'rejected' && (
-<button className="ml-auto px-2 py-1 bg-error text-white rounded text-[10px] font-bold" disabled={saving} onClick={() => handleResubmit(entry)} type="button">
-    Reopen for correction
-</button>
+    correctionExpired ? (
+        <span className="ml-auto text-[10px] font-bold text-error">Correction window expired</span>
+    ) : (
+        <button className="ml-auto px-2 py-1 bg-error text-white rounded text-[10px] font-bold" disabled={saving} onClick={() => handleResubmit(entry)} type="button">
+            Reopen for correction
+        </button>
+    )
 )}
 </div>
+{entry.status === 'rejected' && correctionDeadline && (
+    <p className={`mt-2 text-[10px] ${correctionExpired ? 'text-error' : 'text-outline'}`}>
+        {correctionExpired ? 'This entry can no longer be corrected.' : `Correction window closes ${correctionDeadline.toLocaleString('en-KE')}.`}
+    </p>
+)}
 </>
 )}
 </div>

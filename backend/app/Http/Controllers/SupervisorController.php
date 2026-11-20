@@ -54,6 +54,7 @@ class SupervisorController extends Controller
             'student.user',
             'logbookEntries.comments.user',
             'logbookEntries.reviewHistory.reviewer:id,name',
+            'logbookEntries.reviewHistory.actor:id,name',
         ])->findOrFail($placementId);
 
         // Enforce policy authorization (PlacementPolicy::view)

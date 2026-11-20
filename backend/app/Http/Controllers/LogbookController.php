@@ -199,12 +199,14 @@ class LogbookController extends Controller
         }
 
         $entries = $placement->logbookEntries()
-            ->with(['comments.user:id,name', 'reviewer:id,name', 'reviewHistory.reviewer:id,name'])
+            ->with(['comments.user:id,name', 'reviewer:id,name', 'reviewHistory.reviewer:id,name', 'reviewHistory.actor:id,name'])
             ->orderBy('week_number')
             ->get()
             ->map(function ($entry) {
                 $entry->is_editable = $entry->isEditable();
-                $entry->hours_left = max(0, 72 - $entry->created_at->diffInHours(now()));
+                $entry->hours_left = $entry->correction_deadline
+                    ? max(0, now()->diffInHours($entry->correction_deadline, false))
+                    : max(0, 72 - $entry->created_at->diffInHours(now()));
                 return $entry;
             });
 
