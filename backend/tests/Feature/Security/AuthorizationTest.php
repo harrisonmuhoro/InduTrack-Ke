@@ -336,7 +336,7 @@ class AuthorizationTest extends TestCase
         $brian = User::where('email', 'brian.otieno@student.uonbi.ac.ke')->first();
         $brianPlacement = Placement::whereHas('student.user', fn($q) => $q->where('email', 'brian.otieno@student.uonbi.ac.ke'))->first();
 
-        // Both evaluations seeded — should succeed (not 403)
+        // Both evaluations seeded — should succeed
         $companyEval  = Evaluation::where('placement_id', $brianPlacement->id)->where('evaluator_type', 'company_supervisor')->exists();
         $academicEval = Evaluation::where('placement_id', $brianPlacement->id)->where('evaluator_type', 'academic_supervisor')->exists();
         $this->assertTrue($companyEval, 'Company evaluation must exist for Brian');
@@ -344,8 +344,54 @@ class AuthorizationTest extends TestCase
 
         Sanctum::actingAs($brian);
         $response = $this->getJson("/api/students/placements/{$brianPlacement->id}/certificate");
-        // Must not be 403 (authorization passed); 200 = PDF response or error from PDF lib in test env
-        $this->assertNotEquals(403, $response->status(), 'Certificate should not be forbidden when all conditions are met');
+        // Must return exact 200 OK with application/pdf Content-Type
+        $response->assertStatus(200);
+        $this->assertEquals('application/pdf', $response->headers->get('content-type'));
+        $this->assertStringContainsString('Certificate_', $response->headers->get('content-disposition'));
+    }
+
+    /**
+     * Test 13b: Certificate generation fails when company supervisor evaluation is missing.
+     */
+    public function test_certificate_rejected_when_missing_company_evaluation(): void
+    {
+        $brian = User::where('email', 'brian.otieno@student.uonbi.ac.ke')->first();
+        $brianPlacement = Placement::whereHas('student.user', fn($q) => $q->where('email', 'brian.otieno@student.uonbi.ac.ke'))->first();
+
+        // Delete company evaluation only
+        Evaluation::where('placement_id', $brianPlacement->id)
+            ->where('evaluator_type', 'company_supervisor')
+            ->delete();
+
+        Sanctum::actingAs($brian);
+        $response = $this->getJson("/api/students/placements/{$brianPlacement->id}/certificate");
+        $response->assertStatus(403);
+        $this->assertStringContainsString('Company supervisor evaluation is missing', $response->json('message'));
+    }
+
+    /**
+     * Test 13c: Certificate generation rejected for unauthorized users.
+     */
+    public function test_certificate_rejected_for_unauthorized_user(): void
+    {
+        // Alice attempts to download Brian's certificate
+        $alice = User::where('email', 'alice.wanjiru@student.uonbi.ac.ke')->first();
+        $brianPlacement = Placement::whereHas('student.user', fn($q) => $q->where('email', 'brian.otieno@student.uonbi.ac.ke'))->first();
+
+        Sanctum::actingAs($alice);
+        $this->getJson("/api/students/placements/{$brianPlacement->id}/certificate")->assertStatus(403);
+
+        // Strathmore admin attempts to download Brian's (UoN) certificate
+        $strathAdmin = User::where('email', 'admin@strathmore.edu')->first();
+        Sanctum::actingAs($strathAdmin);
+        $this->getJson("/api/students/placements/{$brianPlacement->id}/certificate")->assertStatus(403);
+
+        // UoN admin CAN download Brian's certificate (authorized institution admin)
+        $uonAdmin = User::where('email', 'admin@uonbi.ac.ke')->first();
+        Sanctum::actingAs($uonAdmin);
+        $response = $this->getJson("/api/students/placements/{$brianPlacement->id}/certificate");
+        $response->assertStatus(200);
+        $this->assertEquals('application/pdf', $response->headers->get('content-type'));
     }
 
     /**
@@ -500,5 +546,76 @@ class AuthorizationTest extends TestCase
         $this->assertTrue($alan->hasRole('institution_supervisor'));
         $this->assertTrue($alan->hasRole('Academic Supervisor')); // case-insensitive / formatted
         $this->assertTrue($alan->isAcademicSupervisor());
+    }
+
+    /**
+     * Test 21: Company manager can update their application decisions, but cross-company modification returns 403.
+     */
+    public function test_company_manager_application_decisions_and_cross_company_isolation(): void
+    {
+        $sfcManager = User::where('email', 'hr@safaricom.co.ke')->first();
+        $this->assertNotNull($sfcManager);
+
+        // Find a Safaricom application (e.g. John's application)
+        $sfcApp = \App\Models\Application::whereHas('slot.company', fn($q) => $q->where('email', 'hr@safaricom.co.ke'))->first();
+        $this->assertNotNull($sfcApp);
+
+        // Find a KCB application (e.g. David's application)
+        $kcbApp = \App\Models\Application::whereHas('slot.company', fn($q) => $q->where('email', 'careers@kcbgroup.com'))->first();
+        $this->assertNotNull($kcbApp);
+
+        // Safaricom manager updating Safaricom application -> 200 OK
+        Sanctum::actingAs($sfcManager);
+        $this->putJson("/api/applications/{$sfcApp->id}/status", ['status' => 'shortlisted'])->assertStatus(200);
+
+        // Safaricom manager attempting to update KCB application -> 403 Forbidden
+        $this->putJson("/api/applications/{$kcbApp->id}/status", ['status' => 'rejected'])->assertStatus(403);
+    }
+
+    /**
+     * Test 22: Profile operations for company manager without an assigned company fail safely with 404.
+     */
+    public function test_profile_update_for_unassigned_company_manager_fails_safely(): void
+    {
+        $unassignedManager = User::factory()->create([
+            'name'              => 'Unassigned Manager',
+            'email'             => 'unassigned.manager@test.ke',
+            'company_id'        => null,
+            'email_verified_at' => now(),
+        ]);
+        $companyRole = Role::where('name', 'company')->first();
+        DB::table('user_roles')->insert(['user_id' => $unassignedManager->id, 'role_id' => $companyRole->id]);
+
+        Sanctum::actingAs($unassignedManager);
+        $response = $this->putJson('/api/profile', [
+            'description' => 'Attempted update without company',
+        ]);
+
+        $response->assertStatus(404);
+        $this->assertStringContainsString('No assigned company profile found', $response->json('message'));
+    }
+
+    /**
+     * Test 23: CompanyPolicy::view blocks unauthorized users from unverified companies while allowing verified companies.
+     */
+    public function test_company_policy_view_distinguishes_verified_from_unverified_companies(): void
+    {
+        // Create an unverified private company
+        $unverifiedCompany = Company::create([
+            'name'         => 'Secret Tech Ltd',
+            'email'        => 'secret@tech.ke',
+            'industry'     => 'Defense',
+            'is_verified'  => false,
+        ]);
+
+        // A student who has no placement or application at this unverified company
+        $student = User::where('email', 'john.doe@student.uonbi.ac.ke')->first();
+
+        $policy = new \App\Policies\CompanyPolicy();
+        $this->assertFalse($policy->view($student, $unverifiedCompany), 'Student must NOT be authorized to view unverified, unrelated company');
+
+        // Verified company (e.g. Safaricom)
+        $sfcCompany = Company::where('email', 'hr@safaricom.co.ke')->first();
+        $this->assertTrue($policy->view($student, $sfcCompany), 'Student CAN view verified partner company');
     }
 }

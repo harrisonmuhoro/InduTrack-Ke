@@ -25,4 +25,14 @@ class Company extends Model
     {
         return $this->hasMany(CompanySupervisor::class);
     }
+
+    public function placements()
+    {
+        return $this->hasMany(Placement::class);
+    }
+
+    public function users()
+    {
+        return $this->hasMany(User::class);
+    }
 }

@@ -47,6 +47,8 @@ class CompanyController extends Controller
             return response()->json(['message' => 'No company profile found for this user.'], 404);
         }
 
+        $this->authorize('view', $company);
+
         return response()->json(
             $company->attachmentSlots()->withCount('applications')->get()
         );
@@ -85,6 +87,8 @@ class CompanyController extends Controller
             return response()->json(['message' => 'No company profile found for this user.'], 404);
         }
 
+        $this->authorize('view', $company);
+
         $slot = $company->attachmentSlots()->findOrFail($slotId);
 
         return response()->json($slot->applications()->with('student.user')->get());
@@ -96,6 +100,8 @@ class CompanyController extends Controller
         if (!$company) {
             return response()->json(['message' => 'No company profile found for this user.'], 404);
         }
+
+        $this->authorize('view', $company);
 
         $applications = Application::with('student.user', 'slot')
             ->whereHas('slot', fn($q) => $q->where('company_id', $company->id))

@@ -61,6 +61,10 @@ Route::middleware(['auth:sanctum', 'throttle:60,1'])->group(function () {
     Route::put('/applications/{id}/status',    [ApplicationController::class, 'updateStatus'])
         ->middleware('role:company,institution_admin,super_admin');
 
+    // ── Completion Certificate (Student, Institution Admin, Super Admin) ─────
+    Route::get('/students/placements/{placementId}/certificate', [\App\Http\Controllers\CertificateController::class, 'generate'])
+        ->middleware('role:student,institution_admin,super_admin');
+
     // ── Student Role Routes ───────────────────────────────────────────────────
     Route::middleware('role:student,super_admin')->group(function () {
         Route::get('/students/slots',        [StudentController::class, 'searchSlots']);
@@ -68,7 +72,6 @@ Route::middleware(['auth:sanctum', 'throttle:60,1'])->group(function () {
         Route::get('/students/match',        [StudentController::class, 'smartMatch']);
         Route::get('/students/placement',    [StudentController::class, 'activePlacement']);
         Route::get('/students/evaluations',  [EvaluationController::class, 'forStudent']);
-        Route::get('/students/placements/{placementId}/certificate', [\App\Http\Controllers\CertificateController::class, 'generate']);
 
         // Applications & Documents
         Route::post('/applications',          [ApplicationController::class, 'apply']);

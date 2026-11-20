@@ -57,8 +57,10 @@ class ProfileController extends Controller
                 $student->update($studentData);
             }
         } elseif ($user->isCompany()) {
-            // Resolve company via foreign key relationship
-            $company = $user->company ?? Company::findOrFail($user->company_id);
+            if (!$user->company_id || (!$user->company && !Company::find($user->company_id))) {
+                return response()->json(['message' => 'No assigned company profile found for this manager.'], 404);
+            }
+            $company = $user->company ?? Company::find($user->company_id);
             $companyData = $request->validate([
                 'description'      => 'sometimes|string',
                 'website'          => 'sometimes|url',
@@ -121,7 +123,10 @@ class ProfileController extends Controller
 
         $user = $request->user();
         if ($user->isCompany()) {
-            $company = $user->company ?? Company::findOrFail($user->company_id);
+            if (!$user->company_id || (!$user->company && !Company::find($user->company_id))) {
+                return response()->json(['message' => 'No assigned company profile found for this manager.'], 404);
+            }
+            $company = $user->company ?? Company::find($user->company_id);
             $company->update(['logo_path' => $path]);
         } else {
             $user->update(['profile_photo_path' => $path]);

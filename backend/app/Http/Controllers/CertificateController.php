@@ -25,7 +25,7 @@ class CertificateController extends Controller
         $isStudent   = ($placement->student?->user_id === $user->id);
         $isInstAdmin = ($user->isInstitutionAdmin()
             && $user->institution_id
-            && $placement->student?->institution_id === $user->institution_id);
+            && (int) $placement->student?->institution_id === (int) $user->institution_id);
 
         if (!$user->isSuperAdmin() && !$isStudent && !$isInstAdmin) {
             return response()->json(['message' => 'Forbidden. Unauthorized to access this certificate.'], 403);
@@ -90,6 +90,7 @@ class CertificateController extends Controller
         ";
 
         $pdf = Pdf::loadHTML($html);
-        return $pdf->download("Certificate_{$placement->student->reg_number}.pdf");
+        $safeRegNumber = str_replace(['/', '\\', ' '], '_', $placement->student->reg_number);
+        return $pdf->download("Certificate_{$safeRegNumber}.pdf");
     }
 }

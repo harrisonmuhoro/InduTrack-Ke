@@ -84,6 +84,7 @@ class EvaluationController extends Controller
             // Only translate genuine duplicate-key violations for the evaluation unique constraint
             $message = $e->getMessage();
             $isDuplicateEvaluation = str_contains($message, 'evaluations_placement_evaluator_type_unique')
+                || str_contains($message, 'evaluations.placement_id')
                 || (str_contains($message, 'Duplicate entry') && str_contains($message, 'evaluations'));
 
             if ($isDuplicateEvaluation) {
